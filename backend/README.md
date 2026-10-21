@@ -115,6 +115,44 @@ This architecture is designed for eventual deployment on the **NXP FRDM-RW612** 
 - **Rule R2/R3 in Embedded C**: Fixed-size static ring buffers tracking active IP counters using FreeRTOS tick counts (`xTaskGetTickCount()`) with strictly bounded SRAM usage.
 - **Rule R4 in Embedded C**: The embedded HTTP server (lwIP) will reject raw malformed HTTP requests at the socket level and can emit compact security events directly to the backend.
 
+## End-to-End Integration Testing
+
+A comprehensive integration test suite (`backend/tests/test_e2e_integration.py`) and a test harness (`backend/tests/harness.py`) provide end-to-end verification of backend workflows using an isolated in-memory SQLite database.
+
+### Running the Tests
+
+```bash
+cd backend
+venv\Scripts\activate
+
+# Run all automated tests (unit + detection + E2E integration)
+pytest -v
+
+# Run only the E2E integration suite
+pytest -v tests/test_e2e_integration.py
+```
+
+### Integration Scenarios Covered
+
+1. **Normal Request Flow**: Requests to allowed endpoints (`/status`) create request logs, trigger zero security alerts, update dashboard statistics accurately, and can be retrieved via `GET /api/logs`.
+2. **Unknown-Endpoint Flow**: Requests to unauthorized paths (`/admin`) create request logs, automatically generate `unknown_endpoint` security events with normalized path and method metadata, and update `GET /api/stats`.
+3. **Request-Rate Flow**: Uses custom test thresholds (e.g., 4 requests in 10s) to verify that volumetric traffic generates `high_request_rate` events with exact request counts and time windows, while cooldown throttles subsequent alert floods.
+4. **Repeated-Request Flow**: Repeated requests targeting a single endpoint trigger `repeated_requests`, while requests interleaved across different endpoints are correctly separated and not falsely combined.
+5. **Database Consistency & Rollback Integrity**: Verifies that database counts across logs, events, and severity/classification breakdowns are in 100% mathematical agreement with `GET /api/stats`. Confirms that failed/invalid operations trigger clean rollbacks without partial or corrupted state.
+6. **API Response Compatibility**: Validates JSON envelopes, status codes, and field keys across all endpoints (`/health`, `/logs`, `/events`, `/stats`, `/device/status`) to ensure the React frontend client contract is strictly preserved.
+7. **Failure & Boundary Scenarios**: Exercises schema violations (missing fields, invalid HTTP methods, invalid classification values, response codes < 100 or > 599) and query parameter constraints (start_time > end_time, negative skip, limit > 100).
+
+### What Remains Untested
+
+- **Physical Network Transports**: Low-level Wi-Fi/Ethernet physical packet loss, TCP fragmentation, or Wi-Fi handshake timeouts on the FRDM-RW612 physical board.
+- **Distributed Multi-Worker State**: In-memory rate-limiting counters are tested within a single process; multi-worker cluster synchronization across multiple machines requires an external Redis instance.
+- **Long-Term Soak Testing**: Multi-day continuous operation under synthetic attack traffic to profile Python garbage collection and SQLite WAL checkpointing over millions of records.
+
+### How This Setup Supports Future FRDM-RW612 Integration
+
+- **Deterministic Payload Contract**: The `HoneypotTestHarness` models the exact JSON schema and payload structure that the FRDM-RW612 firmware will transmit over HTTP (`POST /api/logs` and `POST /api/events`).
+- **Pre-Flashing Firmware Verification**: Embedded C developers can test their proposed log format and telemetry payloads against this backend test suite before compiling and flashing firmware to the FRDM-RW612 board.
+
 ## Project Structure
 
 ```

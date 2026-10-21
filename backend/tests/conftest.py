@@ -65,3 +65,10 @@ def fixture_client(db_session):
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(name="harness")
+def fixture_harness(client):
+    """Create a HoneypotTestHarness instance wrapping the test client."""
+    from tests.harness import HoneypotTestHarness
+    return HoneypotTestHarness(client)
