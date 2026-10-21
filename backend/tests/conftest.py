@@ -13,6 +13,15 @@ from sqlalchemy.pool import StaticPool
 import app.models  # Ensure all models are registered on Base.metadata
 from app.database import Base, get_db
 from app.main import create_app
+from app.services.detection_service import reset_detection_service
+
+
+@pytest.fixture(autouse=True)
+def fixture_reset_detection_service():
+    """Ensure in-memory detection service state is clean before and after each test."""
+    reset_detection_service()
+    yield
+    reset_detection_service()
 
 
 @pytest.fixture(name="db_session")

@@ -362,3 +362,9 @@ When no devices exist, returns `{"devices": []}`.
 - `active`
 - `inactive`
 - `unknown`
+
+### Standard Security Event Types
+- `unknown_endpoint`: Generated when a request targets an endpoint outside the allowlist (`/status`, `/info`, `/config`).
+- `high_request_rate`: Generated when an IP/device exceeds the request rate threshold (default: >= 20 requests in 10s).
+- `repeated_requests`: Generated when requests to the same endpoint exceed the repetition threshold (default: >= 10 requests in 10s).
+- Custom events (e.g. `scan_detected`, `brute_force_attempt`) submitted manually via `POST /api/events`.
