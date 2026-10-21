@@ -13,6 +13,12 @@ class ClassificationEnum(str, Enum):
     suspicious = "suspicious"
 
 
+VALID_HTTP_METHODS = {
+    "GET", "POST", "PUT", "DELETE", "PATCH",
+    "HEAD", "OPTIONS", "TRACE", "CONNECT",
+}
+
+
 class RequestLogCreate(BaseModel):
     """Schema for creating a new request log entry."""
     timestamp: datetime = Field(..., description="UTC timestamp of the observed request")
@@ -32,6 +38,30 @@ class RequestLogCreate(BaseModel):
         if isinstance(v, str):
             return datetime.fromisoformat(v.replace("Z", "+00:00"))
         return v
+
+    @field_validator("method")
+    @classmethod
+    def validate_method(cls, v: str) -> str:
+        """Validate and normalize HTTP method."""
+        method_clean = v.strip().upper()
+        if method_clean not in VALID_HTTP_METHODS:
+            raise ValueError(
+                f"Invalid HTTP method: '{v}'. Must be a valid standard HTTP method."
+            )
+        return method_clean
+
+    @field_validator("endpoint")
+    @classmethod
+    def validate_endpoint(cls, v: str) -> str:
+        """Validate endpoint path format."""
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("Endpoint path cannot be empty")
+        if not cleaned.startswith("/"):
+            raise ValueError("Endpoint must be an absolute path starting with '/'")
+        if "\x00" in cleaned or any(ord(c) < 32 for c in cleaned):
+            raise ValueError("Endpoint contains invalid control characters")
+        return cleaned
 
 
 class RequestLogResponse(BaseModel):

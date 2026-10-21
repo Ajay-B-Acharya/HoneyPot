@@ -7,10 +7,14 @@ from sqlalchemy.orm import Session
 
 from app.models.request_log import RequestLog
 from app.schemas.request_log import RequestLogCreate
+from app.services.detection_service import get_detection_service
 
 
 def create_log(db: Session, log_data: RequestLogCreate) -> RequestLog:
-    """Create a new request log record.
+    """Create a new request log record and evaluate security detection rules.
+
+    The request log and any triggered security events are persisted atomically
+    within the same database transaction.
 
     Args:
         db: Database session.
@@ -29,9 +33,16 @@ def create_log(db: Session, log_data: RequestLogCreate) -> RequestLog:
         classification=log_data.classification.value,
     )
     db.add(db_log)
-    db.commit()
-    db.refresh(db_log)
-    return db_log
+
+    try:
+        detection_service = get_detection_service()
+        detection_service.process_request_log(db, db_log)
+        db.commit()
+        db.refresh(db_log)
+        return db_log
+    except Exception:
+        db.rollback()
+        raise
 
 
 def get_logs(

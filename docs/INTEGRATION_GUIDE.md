@@ -83,6 +83,13 @@ export interface HealthResponse {
 /** Severity enum for security events */
 export type EventSeverity = "informational" | "warning" | "critical";
 
+/** Standard detection event types */
+export type SecurityEventType =
+  | "unknown_endpoint"
+  | "high_request_rate"
+  | "repeated_requests"
+  | string;
+
 /** Classification enum for request logs */
 export type RequestClassification = "normal" | "unusual" | "suspicious";
 

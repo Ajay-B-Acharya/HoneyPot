@@ -27,6 +27,26 @@ class Settings(BaseSettings):
     # Device status threshold (seconds) - device considered "inactive" after this
     DEVICE_INACTIVE_THRESHOLD_SECONDS: int = 300
 
+    # Detection Engine Configuration
+    DETECTION_ALLOWED_ENDPOINTS: str = "/status,/info,/config"
+    DETECTION_RATE_THRESHOLD: int = 20
+    DETECTION_RATE_WINDOW_SECONDS: int = 10
+    DETECTION_RATE_COOLDOWN_SECONDS: int = 10
+    DETECTION_REPEATED_THRESHOLD: int = 10
+    DETECTION_REPEATED_WINDOW_SECONDS: int = 10
+    DETECTION_REPEATED_COOLDOWN_SECONDS: int = 10
+    DETECTION_MAX_TRACKING_ENTRIES: int = 10000
+    DETECTION_TRACKING_EXPIRATION_SECONDS: int = 60
+
+    @property
+    def detection_allowed_endpoints_set(self) -> set[str]:
+        """Parse DETECTION_ALLOWED_ENDPOINTS into a set of normalized paths."""
+        return {
+            ep.strip()
+            for ep in self.DETECTION_ALLOWED_ENDPOINTS.split(",")
+            if ep.strip()
+        }
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse CORS_ORIGINS comma-separated string into a list."""
