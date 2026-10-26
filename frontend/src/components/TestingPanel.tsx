@@ -114,10 +114,10 @@ export const TestingPanel: React.FC<TestingPanelProps> = ({
   };
 
   return (
-    <div className="panel" style={{ marginTop: "1.5rem" }}>
+    <div id="testing-panel" className="panel" style={{ marginTop: "1.5rem" }}>
       <div className="panel-header">
         <div className="panel-title">
-          <Play size={18} className="text-emerald-400" />
+          <Play size={18} className="icon-emerald" />
           <span>Backend Detection Testing Panel</span>
         </div>
       </div>
@@ -134,7 +134,7 @@ export const TestingPanel: React.FC<TestingPanelProps> = ({
             disabled={disabled || submitting}
           >
             <div className="test-btn-title">
-              <Send size={14} className="text-emerald-400" />
+              <Send size={14} className="icon-emerald" />
               <span>Normal Log (/status)</span>
             </div>
             <div className="test-btn-desc">
@@ -148,7 +148,7 @@ export const TestingPanel: React.FC<TestingPanelProps> = ({
             disabled={disabled || submitting}
           >
             <div className="test-btn-title">
-              <ShieldAlert size={14} className="text-amber-400" />
+              <ShieldAlert size={14} className="icon-amber" />
               <span>Probe Unknown (/admin)</span>
             </div>
             <div className="test-btn-desc">
@@ -162,7 +162,7 @@ export const TestingPanel: React.FC<TestingPanelProps> = ({
             disabled={disabled || submitting}
           >
             <div className="test-btn-title">
-              <Zap size={14} className="text-cyan-400" />
+              <Zap size={14} className="icon-cyan" />
               <span>Traffic Burst (5x)</span>
             </div>
             <div className="test-btn-desc">
@@ -176,7 +176,7 @@ export const TestingPanel: React.FC<TestingPanelProps> = ({
             disabled={disabled || submitting}
           >
             <div className="test-btn-title">
-              <AlertTriangle size={14} className="text-rose-400" />
+              <AlertTriangle size={14} className="icon-rose" />
               <span>Manual Critical Event</span>
             </div>
             <div className="test-btn-desc">

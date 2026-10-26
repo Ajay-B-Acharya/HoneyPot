@@ -22,6 +22,30 @@ from app.models.request_log import RequestLog
 from app.models.security_event import SecurityEvent
 
 
+def _to_utc(dt: datetime | None) -> datetime | None:
+    """Normalize datetime to UTC timezone-aware."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _update_device_map(
+    device_map: dict[str, datetime | None],
+    device_id: str,
+    last_seen: datetime | None,
+) -> None:
+    """Safely update device last_seen timestamp in the map."""
+    utc_seen = _to_utc(last_seen)
+    if device_id not in device_map:
+        device_map[device_id] = utc_seen
+    elif utc_seen is not None:
+        existing = device_map[device_id]
+        if existing is None or utc_seen > existing:
+            device_map[device_id] = utc_seen
+
+
 def get_device_statuses(db: Session) -> list[dict]:
     """Get status information for all known devices.
 
@@ -54,15 +78,13 @@ def get_device_statuses(db: Session) -> list[dict]:
         .all()
     )
 
-    # Merge device data
+    # Merge device data safely
     device_map: dict[str, datetime | None] = {}
     for device_id, last_seen in log_devices:
-        if device_id not in device_map or (last_seen and last_seen > device_map[device_id]):
-            device_map[device_id] = last_seen
+        _update_device_map(device_map, device_id, last_seen)
 
     for device_id, last_seen in event_devices:
-        if device_id not in device_map or (last_seen and last_seen > device_map[device_id]):
-            device_map[device_id] = last_seen
+        _update_device_map(device_map, device_id, last_seen)
 
     now = datetime.now(timezone.utc)
     devices = []
@@ -72,9 +94,6 @@ def get_device_statuses(db: Session) -> list[dict]:
             status = "unknown"
             last_activity = None
         else:
-            # Ensure last_seen is timezone-aware for comparison
-            if last_seen.tzinfo is None:
-                last_seen = last_seen.replace(tzinfo=timezone.utc)
             elapsed = (now - last_seen).total_seconds()
             status = "active" if elapsed <= threshold_seconds else "inactive"
             last_activity = last_seen.isoformat()

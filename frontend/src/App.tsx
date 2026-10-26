@@ -20,6 +20,9 @@ import { StatsOverview } from "./components/StatsOverview";
 import { SecurityEventsTable } from "./components/SecurityEventsTable";
 import { RequestLogsTable } from "./components/RequestLogsTable";
 import { TestingPanel } from "./components/TestingPanel";
+import { ThemeToggle } from "./components/ThemeToggle";
+import { HeroSection } from "./components/HeroSection";
+import { ScrollProgressBar, BackToTop } from "./components/ScrollUtils";
 
 export const App: React.FC = () => {
   // State
@@ -109,12 +112,25 @@ export const App: React.FC = () => {
     };
   }, [autoRefresh, loadDashboardData]);
 
+  const handleScrollToTesting = () => {
+    const el = document.getElementById("testing-panel");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
+  const activeDeviceCount =
+    deviceData?.devices.filter((d) => d.status === "active").length ?? 0;
+
   return (
     <div className="dashboard-container">
-      {/* Top Header */}
+      <ScrollProgressBar />
+      <BackToTop />
+
+      {/* Top Sticky Header */}
       <header className="dashboard-header">
         <div className="brand-section">
-          <Shield size={28} className="brand-icon" />
+          <Shield size={26} className="brand-icon" />
           <div>
             <div className="brand-title">IoT Honeypot Monitor</div>
             <div className="brand-subtitle">
@@ -124,6 +140,8 @@ export const App: React.FC = () => {
         </div>
 
         <div className="header-controls">
+          <ThemeToggle />
+
           <label className="auto-refresh-toggle">
             <input
               type="checkbox"
@@ -149,6 +167,12 @@ export const App: React.FC = () => {
           </button>
         </div>
       </header>
+
+      {/* Hero Section */}
+      <HeroSection
+        onScrollToTesting={handleScrollToTesting}
+        activeDeviceCount={activeDeviceCount}
+      />
 
       {/* Global Connection Error Banner if Backend is Down */}
       {error && (

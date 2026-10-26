@@ -1,7 +1,7 @@
 """Pydantic schemas for security event validation and serialization."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
@@ -34,9 +34,12 @@ class SecurityEventCreate(BaseModel):
     @field_validator("timestamp", mode="before")
     @classmethod
     def parse_timestamp(cls, v):
-        """Ensure timestamp is properly parsed."""
+        """Ensure timestamp is properly parsed and timezone-aware UTC."""
         if isinstance(v, str):
-            return datetime.fromisoformat(v.replace("Z", "+00:00"))
+            parsed = datetime.fromisoformat(v.replace("Z", "+00:00"))
+            return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+        if isinstance(v, datetime) and v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
         return v
 
 

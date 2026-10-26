@@ -40,9 +40,9 @@ export const DeviceStatusCard: React.FC<DeviceStatusCardProps> = ({
           ) : primaryDevice ? (
             <>
               {isDeviceActive ? (
-                <CheckCircle2 size={16} />
+                <CheckCircle2 size={16} className="icon-emerald" />
               ) : (
-                <Clock size={16} />
+                <Clock size={16} className="icon-amber" />
               )}
               <span>
                 {primaryDevice.device_id} ({primaryDevice.status})
@@ -50,7 +50,7 @@ export const DeviceStatusCard: React.FC<DeviceStatusCardProps> = ({
             </>
           ) : (
             <>
-              <AlertCircle size={16} />
+              <AlertCircle size={16} className="icon-dim" />
               <span>FRDM-RW612 Not Connected</span>
             </>
           )}

@@ -37,7 +37,7 @@ export const RequestLogsTable: React.FC<RequestLogsTableProps> = ({
     <div className="panel">
       <div className="panel-header">
         <div className="panel-title">
-          <Terminal size={18} className="text-cyan-400" />
+          <Terminal size={18} className="icon-cyan" />
           <span>HTTP Request Logs ({logs.length})</span>
         </div>
       </div>
