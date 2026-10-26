@@ -30,7 +30,7 @@ export const StatsOverview: React.FC<StatsOverviewProps> = ({ stats, loading }) 
       <div className="stat-card">
         <div className="stat-header">
           <span>Security Events</span>
-          <ShieldAlert size={16} className="text-amber-400" />
+          <ShieldAlert size={16} className="icon-amber" />
         </div>
         <div className="stat-value">
           {loading ? "..." : stats?.total_security_events ?? 0}
@@ -46,7 +46,7 @@ export const StatsOverview: React.FC<StatsOverviewProps> = ({ stats, loading }) 
       <div className="stat-card">
         <div className="stat-header">
           <span>Suspicious Requests</span>
-          <AlertTriangle size={16} className="text-rose-400" />
+          <AlertTriangle size={16} className="icon-rose" />
         </div>
         <div className="stat-value">
           {loading ? "..." : stats?.suspicious_requests ?? 0}
@@ -66,7 +66,7 @@ export const StatsOverview: React.FC<StatsOverviewProps> = ({ stats, loading }) 
       <div className="stat-card">
         <div className="stat-header">
           <span>Normal Requests</span>
-          <ShieldCheck size={16} className="text-emerald-400" />
+          <ShieldCheck size={16} className="icon-emerald" />
         </div>
         <div className="stat-value">
           {loading ? "..." : stats?.normal_requests ?? 0}

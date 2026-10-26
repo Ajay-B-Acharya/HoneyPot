@@ -515,3 +515,39 @@ class TestTrackerRobustness:
         events2 = service.evaluate_request(log2)
         assert not any(e.event_type == "unknown_endpoint" for e in events2)
 
+    def test_client_classification_independence_from_engine(self, client):
+        """Verify that client-provided classification does not override engine rules.
+
+        - A client-supplied 'normal' classification on an unallowed endpoint (/admin)
+          MUST still trigger an automated 'unknown_endpoint' security event.
+        - A client-supplied 'suspicious' classification on an allowed endpoint (/status)
+          does NOT automatically generate an engine event unless engine rules are breached.
+        """
+        # Case 1: Client claims /admin is 'normal'
+        res1 = client.post("/api/logs", json={
+            **BASE_LOG,
+            "endpoint": "/admin",
+            "classification": "normal",
+        })
+        assert res1.status_code == 201
+        assert res1.json()["classification"] == "normal"
+
+        events_res1 = client.get("/api/events?event_type=unknown_endpoint")
+        assert events_res1.status_code == 200
+        assert events_res1.json()["total"] == 1
+        assert events_res1.json()["items"][0]["event_type"] == "unknown_endpoint"
+
+        # Case 2: Client claims /status is 'suspicious'
+        res2 = client.post("/api/logs", json={
+            **BASE_LOG,
+            "endpoint": "/status",
+            "classification": "suspicious",
+        })
+        assert res2.status_code == 201
+        assert res2.json()["classification"] == "suspicious"
+
+        # No new security event generated because /status is allowed
+        events_res2 = client.get("/api/events")
+        assert events_res2.status_code == 200
+        assert events_res2.json()["total"] == 1  # Only the prior /admin event exists
+

@@ -44,7 +44,7 @@ export const SecurityEventsTable: React.FC<SecurityEventsTableProps> = ({
     <div className="panel">
       <div className="panel-header">
         <div className="panel-title">
-          <ShieldAlert size={18} className="text-amber-400" />
+          <ShieldAlert size={18} className="icon-amber" />
           <span>Security Events ({events.length})</span>
         </div>
       </div>

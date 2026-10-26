@@ -85,3 +85,15 @@ class TestDeviceStatus:
         response = client.get("/api/device/status")
         data = response.json()
         assert data["devices"][0]["status"] == "inactive"
+
+    def test_device_status_mixed_timestamps_and_activity(self, client):
+        """Test that device status handles mixed activity and timestamp ordering safely."""
+        # Post an older log then a newer event for the same device
+        client.post("/api/logs", json={**VALID_LOG, "timestamp": "2026-10-20T06:00:00Z"})
+        client.post("/api/events", json={**VALID_EVENT, "timestamp": "2026-10-20T06:30:00Z"})
+
+        response = client.get("/api/device/status")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["devices"]) == 1
+        assert "2026-10-20T06:30:00" in data["devices"][0]["last_seen"]

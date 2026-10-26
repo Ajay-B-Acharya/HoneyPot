@@ -35,12 +35,12 @@ export const BackendStatus: React.FC<BackendStatusProps> = ({
             "Connecting..."
           ) : isOnline ? (
             <>
-              <Wifi size={16} className="text-emerald-400" />
+              <Wifi size={16} className="icon-emerald" />
               <span>Online (FastAPI)</span>
             </>
           ) : (
             <>
-              <WifiOff size={16} className="text-rose-400" />
+              <WifiOff size={16} className="icon-rose" />
               <span>Offline / Unreachable</span>
             </>
           )}
