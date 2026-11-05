@@ -64,9 +64,9 @@ npm run build
 ### Terminal 1: Start FastAPI Backend
 ```powershell
 cd "C:\Projects\IOT honey pot monitoring\backend"
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-- API Base URL: `http://127.0.0.1:8000`
+- API Base URL: `http://127.0.0.1:8000` (Localhost) / `http://<YOUR_LAN_IP>:8000` (LAN)
 - Interactive Swagger API Docs: `http://127.0.0.1:8000/docs`
 - Redoc Documentation: `http://127.0.0.1:8000/redoc`
 
@@ -76,6 +76,16 @@ cd "C:\Projects\IOT honey pot monitoring\frontend"
 npm run dev
 ```
 - Dashboard URL: `http://localhost:5173`
+
+### Terminal 3 (Optional): Flash & Monitor FRDM-RW612 Firmware
+```powershell
+cd "C:\Projects\IOT honey pot monitoring"
+# Flash compiled firmware via SWD J-Link:
+backend\.venv\Scripts\python.exe firmware\run_jlink.py "C:\Projects\IOT honey pot monitoring\firmware\flash.jlink"
+
+# Monitor real-time microcontroller serial logs on COM7:
+backend\.venv\Scripts\python.exe firmware\monitor_serial.py
+```
 
 ---
 

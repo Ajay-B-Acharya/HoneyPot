@@ -110,7 +110,19 @@ dist/assets/index-CI4o5zFy.js   249.00 kB │ gzip: 77.10 kB
 
 ---
 
-## 5. Known Limitations
+## 5. Physical Hardware Integration & Firmware Test Results
 
-1. **In-Memory Rate Tracking**: The sliding-window rate tracking structures (`SlidingWindowTracker`) reside in application process memory. While completely thread-safe and memory-bounded, the in-memory window resets if the backend server process is restarted. For multi-process clustering in enterprise production, a Redis-backed window tracker is recommended.
-2. **Physical Board Verification**: Due to temporary hardware unavailability, physical Wi-Fi radio transmission and FreeRTOS hardware task scheduling on the NXP FRDM-RW612 board must be validated once the board is accessible.
+| Verification Dimension | Hardware / Tool Target | Physical Test Command | Actual Observed Result |
+| :--- | :--- | :--- | :--- |
+| **Firmware Compilation** | Arm GNU Toolchain 14.2.rel1 + West | `west build -b frdmrw612 ...` | **Success**: `iot_honeypot.elf` (Flash: 498,048 B, RAM: 302,504 B, 0 errors, 0 warnings) |
+| **SWD Debug Enumeration** | SEGGER J-Link MCU-Link (S/N 1061922140) | `JLink.exe -device RW612 -if SWD` | **Success**: DPIDR `0x6BA02477`, Cortex-M33 identified, VTref=3.30V |
+| **Flash Memory Programming** | FRDM-RW612 External NOR Flash @ 0x08000000 | `loadfile iot_honeypot.elf` | **Success**: 589,824 bytes programmed & verified at 67 KB/s |
+| **Microcontroller Boot Trace** | COM7 (J-Link CDC UART @ 115200 baud) | Real-time serial monitoring | **Success**: Firmware banner, WPL init, 428 KB wireless FW loaded |
+| **RTOS Multitasking Execution** | Cortex-M33 CPU Registers via CoreSight | CoreSight SWD inspection | **Success**: Thread mode active (`CONTROL=02`, `IPSR=000`), FreeRTOS scheduler running |
+
+---
+
+## 6. Known Limitations
+
+1. **In-Memory Rate Tracking**: The backend sliding-window rate tracking structures (`SlidingWindowTracker`) reside in application process memory. While completely thread-safe and memory-bounded, the in-memory window resets if the central backend server process is restarted. For multi-process clustering in enterprise production, a Redis-backed window tracker is recommended.
+2. **Access Point Signal & Range**: Onboard Wi-Fi 6 association requires a reliable 2.4 GHz 802.11b/g/n/ax signal from the local access point (`AJAY`). In high-attenuation environments, the board retries association while maintaining local honeypot decoy operation.

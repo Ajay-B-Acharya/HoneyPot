@@ -40,3 +40,15 @@ dist/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Firmware build and debug artifacts
+firmware/build/
+firmware/*.log
+firmware/*.jlink
+firmware/jlink_options.txt
+firmware/jlink_help.txt
+firmware/jlink_run.txt
+firmware/jlink_portable/
+firmware/include/honeypot_config.h
+
+
