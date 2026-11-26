@@ -6,12 +6,14 @@ interface SecurityEventsTableProps {
   events: SecurityEvent[];
   loading: boolean;
   error: string | null;
+  onViewAll?: () => void;
 }
 
 export const SecurityEventsTable: React.FC<SecurityEventsTableProps> = ({
   events,
   loading,
   error,
+  onViewAll,
 }) => {
   const getSeverityBadge = (severity: string) => {
     switch (severity.toLowerCase()) {
@@ -47,6 +49,11 @@ export const SecurityEventsTable: React.FC<SecurityEventsTableProps> = ({
           <ShieldAlert size={18} className="icon-amber" />
           <span>Security Events ({events.length})</span>
         </div>
+        {onViewAll && (
+          <button type="button" className="btn-link" onClick={onViewAll}>
+            View All
+          </button>
+        )}
       </div>
 
       <div className="table-container">

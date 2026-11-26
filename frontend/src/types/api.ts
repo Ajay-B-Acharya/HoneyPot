@@ -187,3 +187,22 @@ export interface BatchSyncResponse {
   duplicates: number;
   status: string;
 }
+
+export interface EdgeObservation {
+  id: number;
+  observation_id: string;
+  device_id: string;
+  source_ip: string;
+  endpoint_id: number;
+  endpoint: string | null;
+  event_timestamp: string;
+  sequence_num: number;
+  edge_score: number;
+  triggered_event: string | null;
+  correlation_score: number;
+  correlation_confidence: number;
+  transition_fingerprint: string | null;
+  shared_ip_suspected: boolean;
+  derived_event_id?: number | null;
+  duplicate?: boolean;
+}

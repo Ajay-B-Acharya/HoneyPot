@@ -9,6 +9,7 @@ import {
   CreateSecurityEventPayload,
   IPProfile,
   IPProfileSummary,
+  EdgeObservation,
 } from "../types/api";
 
 export const API_BASE_URL =
@@ -57,6 +58,11 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
 /** Fetch status of connected or recorded IoT devices */
 export async function fetchDeviceStatuses(): Promise<DeviceStatusResponse> {
   return request<DeviceStatusResponse>("/device/status");
+}
+
+/** Fetch recent compact edge observations */
+export async function fetchObservations(limit = 50): Promise<EdgeObservation[]> {
+  return request<EdgeObservation[]>(`/observations?limit=${limit}`);
 }
 
 /** Fetch paginated security events */
