@@ -145,6 +145,7 @@ export const IPProfilesTable: React.FC<IPProfilesTableProps> = ({
                 <th>Repeated</th>
                 <th>Unique Endpoints</th>
                 <th>Rate (req/min)</th>
+                <th>Confidence</th>
                 <th>Last Active</th>
               </tr>
             </thead>
@@ -220,6 +221,16 @@ export const IPProfilesTable: React.FC<IPProfilesTableProps> = ({
                       </div>
                     </td>
                     <td className="mono-text">{p.request_frequency}</td>
+                    <td className="mono-text" style={{ fontSize: "0.75rem" }}>
+                      {typeof p.correlation_confidence === "number"
+                        ? `${Math.round(p.correlation_confidence * 100)}%`
+                        : "100%"}
+                      {p.shared_ip_suspected && (
+                        <span className="badge badge-warning" style={{ marginLeft: "4px" }}>
+                          Shared IP
+                        </span>
+                      )}
+                    </td>
                     <td className="mono-text" style={{ fontSize: "0.75rem" }}>
                       {new Date(p.last_seen).toLocaleTimeString()}
                     </td>

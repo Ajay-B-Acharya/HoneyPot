@@ -123,6 +123,9 @@ export interface IPProfile {
   request_frequency: number;
   threat_score: number;
   risk_level: RiskLevel;
+  correlation_confidence?: number;
+  shared_ip_suspected?: boolean;
+  transition_fingerprint?: string | null;
   first_seen: string;
   last_seen: string;
   is_active: boolean;

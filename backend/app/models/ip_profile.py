@@ -38,6 +38,15 @@ class IPProfile(Base):
     risk_level: Mapped[str] = mapped_column(
         String(20), nullable=False, default="low", index=True
     )
+    correlation_confidence: Mapped[float] = mapped_column(
+        Float, nullable=False, default=1.0, doc="Backend correlation confidence 0.0-1.0"
+    )
+    shared_ip_suspected: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, doc="True if NAT/shared-IP ambiguity detected"
+    )
+    transition_fingerprint: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, doc="Recent endpoint transition fingerprint"
+    )
     first_seen: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

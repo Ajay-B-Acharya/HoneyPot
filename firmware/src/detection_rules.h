@@ -35,6 +35,8 @@ typedef struct {
     EventSeverity_t severity;
     char event_description[128];
     uint8_t ip_threat_score;
+    uint16_t endpoint_id;
+    uint16_t edge_seq_score;
     char ip_risk_level[16];
 } RequestRecord_t;
 

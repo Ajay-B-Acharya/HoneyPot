@@ -103,6 +103,8 @@ static void HandleHttpClient(int client_sock, struct sockaddr_in *client_addr)
                    seq_threat_delta, (unsigned int)profile->sequence_history.sequence_score);
         }
 
+        record.endpoint_id = Sequence_ResolveEndpointId(record.endpoint, NULL);
+        record.edge_seq_score = profile->sequence_history.sequence_score;
         record.ip_threat_score = profile->threat_score;
         strncpy(record.ip_risk_level, IPProfile_GetRiskLevelString(profile->risk_level), sizeof(record.ip_risk_level) - 1);
     }

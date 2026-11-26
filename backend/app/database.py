@@ -79,6 +79,15 @@ def _ensure_schema_columns() -> None:
                             f"ON {table_name} (client_event_id)"
                         )
                     )
+    if "ip_profiles" in tables:
+        ip_cols = {col["name"] for col in inspector.get_columns("ip_profiles")}
+        with engine.begin() as conn:
+            if "correlation_confidence" not in ip_cols:
+                conn.execute(text("ALTER TABLE ip_profiles ADD COLUMN correlation_confidence FLOAT NOT NULL DEFAULT 1.0"))
+            if "shared_ip_suspected" not in ip_cols:
+                conn.execute(text("ALTER TABLE ip_profiles ADD COLUMN shared_ip_suspected BOOLEAN NOT NULL DEFAULT 0"))
+            if "transition_fingerprint" not in ip_cols:
+                conn.execute(text("ALTER TABLE ip_profiles ADD COLUMN transition_fingerprint VARCHAR(128)"))
 
 
 def init_db() -> None:

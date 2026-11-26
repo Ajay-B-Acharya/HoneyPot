@@ -40,6 +40,9 @@ class IPProfileResponse(BaseModel):
         ..., ge=0, le=100, description="Dynamic threat score between 0 and 100"
     )
     risk_level: RiskLevelEnum = Field(..., description="Calculated threat risk category")
+    correlation_confidence: float = Field(1.0, ge=0.0, le=1.0, description="Correlation confidence (0-1)")
+    shared_ip_suspected: bool = Field(False, description="Whether shared-IP/NAT ambiguity is suspected")
+    transition_fingerprint: str | None = Field(None, description="Recent endpoint transition fingerprint")
     first_seen: datetime = Field(..., description="UTC timestamp of first request")
     last_seen: datetime = Field(..., description="UTC timestamp of most recent activity")
     is_active: bool = Field(..., description="Whether profile is considered actively monitored")

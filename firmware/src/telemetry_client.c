@@ -137,6 +137,8 @@ bool Telemetry_Enqueue(const RequestRecord_t *record)
     item.severity = record->severity;
     strncpy(item.event_description, record->event_description, sizeof(item.event_description) - 1U);
     item.ip_threat_score = record->ip_threat_score;
+    item.endpoint_id = record->endpoint_id;
+    item.edge_seq_score = record->edge_seq_score;
     strncpy(item.ip_risk_level, record->ip_risk_level, sizeof(item.ip_risk_level) - 1U);
 
     bool is_alert = (item.triggered_event != EVENT_NONE);
@@ -462,7 +464,7 @@ void Telemetry_Task(void *param)
                      "\"severity\":\"%s\","
                      "\"description\":\"%s\","
                      "\"source_ip\":\"%s\","
-                     "\"metadata\":{\"endpoint\":\"%s\",\"method\":\"%s\",\"threat_score\":%u,\"risk_level\":\"%s\",\"uptime_ms\":%lu,\"seq_num\":%lu}"
+                     "\"metadata\":{\"endpoint\":\"%s\",\"endpoint_id\":%u,\"method\":\"%s\",\"threat_score\":%u,\"edge_score\":%u,\"observation_id\":\"%s\",\"risk_level\":\"%s\",\"uptime_ms\":%lu,\"seq_num\":%lu}"
                      "}",
                      item.client_event_id,
                      HONEYPOT_DEVICE_ID,
@@ -471,8 +473,11 @@ void Telemetry_Task(void *param)
                      item.event_description,
                      item.source_ip,
                      item.endpoint,
+                     (unsigned int)item.endpoint_id,
                      item.method,
                      item.ip_threat_score,
+                     (unsigned int)item.edge_seq_score,
+                     item.client_event_id,
                      item.ip_risk_level,
                      (unsigned long)item.timestamp_tick,
                      (unsigned long)item.seq_num);

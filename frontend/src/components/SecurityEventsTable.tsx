@@ -67,8 +67,9 @@ export const SecurityEventsTable: React.FC<SecurityEventsTableProps> = ({
                 <th>Time (UTC)</th>
                 <th>Type</th>
                 <th>Severity</th>
-                <th>Endpoint</th>
-                <th>Source IP</th>
+                <th>Timeline / Endpoint</th>
+                <th>Scores &amp; Confidence</th>
+                <th>Source IP / Obs ID</th>
                 <th>Description</th>
               </tr>
             </thead>
@@ -78,6 +79,13 @@ export const SecurityEventsTable: React.FC<SecurityEventsTableProps> = ({
                   evt.metadata?.endpoint ??
                   evt.metadata?.normalized_endpoint ??
                   "-";
+                const obsId = evt.metadata?.observation_id ?? evt.metadata?.client_event_id ?? null;
+                const edgeScore = evt.metadata?.edge_score ?? evt.metadata?.threat_score ?? null;
+                const corrScore = evt.metadata?.correlation_score ?? evt.metadata?.sequence_threat_score ?? null;
+                const confidence = typeof evt.metadata?.correlation_confidence === "number"
+                  ? Math.round(evt.metadata.correlation_confidence * 100)
+                  : null;
+                const sharedIp = Boolean(evt.metadata?.shared_ip_suspected);
 
                 return (
                   <tr key={evt.id}>
@@ -85,10 +93,10 @@ export const SecurityEventsTable: React.FC<SecurityEventsTableProps> = ({
                       {new Date(evt.timestamp).toLocaleTimeString()}
                     </td>
                     <td>
-                      {evt.event_type === "attack_sequence" ? (
+                      {evt.event_type === "attack_sequence" || evt.event_type === "correlated_attack_sequence" ? (
                         <span className="badge badge-critical" style={{ background: "#4c0519", color: "#f43f5e" }}>
                           <GitCommit size={12} style={{ marginRight: "3px" }} />
-                          {evt.metadata?.pattern ?? "attack_sequence"}
+                          {evt.metadata?.pattern ?? evt.event_type}
                         </span>
                       ) : (
                         <span className="badge badge-info">{evt.event_type}</span>
@@ -113,8 +121,29 @@ export const SecurityEventsTable: React.FC<SecurityEventsTableProps> = ({
                         endpoint
                       )}
                     </td>
-                    <td className="mono-cell">{evt.source_ip ?? "None"}</td>
-                    <td title={evt.description} style={{ maxWidth: "320px" }}>
+                    <td className="mono-cell" style={{ fontSize: "0.75rem" }}>
+                      {edgeScore !== null || corrScore !== null ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                          <span>Edge: {edgeScore ?? "-"} | Corr: {corrScore ?? "-"}</span>
+                          {confidence !== null && (
+                            <span style={{ color: sharedIp ? "var(--accent-amber)" : "var(--accent-emerald)" }}>
+                              Conf: {confidence}%{sharedIp ? " (Shared-IP)" : ""}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                    <td className="mono-cell">
+                      <div>{evt.source_ip ?? "None"}</div>
+                      {obsId && (
+                        <div style={{ fontSize: "0.6875rem", color: "var(--text-muted)" }} title={String(obsId)}>
+                          {String(obsId)}
+                        </div>
+                      )}
+                    </td>
+                    <td title={evt.description} style={{ maxWidth: "280px" }}>
                       {evt.description}
                     </td>
                   </tr>
