@@ -1,5 +1,6 @@
 """Tests for Split-Stage Edge-to-Backend Threat Correlation & IP Churn / Shared-IP handling."""
 
+import uuid
 from fastapi.testclient import TestClient
 from app.main import app
 
@@ -7,13 +8,14 @@ client = TestClient(app)
 
 
 def test_out_of_order_observations_reconstruct_sequence():
+    tag = uuid.uuid4().hex[:8]
     # Send observations out of chronological order (step 3 first, then 1, then 2)
     batch = {
         "observations": [
             {
-                "observation_id": "obs-ooo-003",
+                "observation_id": f"obs-ooo-{tag}-003",
                 "device_id": "rw612-security-01",
-                "source_ip": "10.10.10.50",
+                "source_ip": f"10.10.10.{int(tag[:2], 16) % 200 + 1}",
                 "endpoint_id": 12,
                 "endpoint": "/config",
                 "event_timestamp": "2026-11-26T12:00:03Z",
@@ -22,9 +24,9 @@ def test_out_of_order_observations_reconstruct_sequence():
                 "triggered_event": "attack_sequence",
             },
             {
-                "observation_id": "obs-ooo-001",
+                "observation_id": f"obs-ooo-{tag}-001",
                 "device_id": "rw612-security-01",
-                "source_ip": "10.10.10.50",
+                "source_ip": f"10.10.10.{int(tag[:2], 16) % 200 + 1}",
                 "endpoint_id": 1,
                 "endpoint": "/",
                 "event_timestamp": "2026-11-26T12:00:01Z",
@@ -32,9 +34,9 @@ def test_out_of_order_observations_reconstruct_sequence():
                 "edge_score": 2,
             },
             {
-                "observation_id": "obs-ooo-002",
+                "observation_id": f"obs-ooo-{tag}-002",
                 "device_id": "rw612-security-01",
-                "source_ip": "10.10.10.50",
+                "source_ip": f"10.10.10.{int(tag[:2], 16) % 200 + 1}",
                 "endpoint_id": 10,
                 "endpoint": "/admin",
                 "event_timestamp": "2026-11-26T12:00:02Z",
@@ -87,11 +89,12 @@ def test_shared_ip_ambiguity_lowers_confidence():
 
 
 def test_ip_churn_roaming_fingerprint_match():
+    tag = uuid.uuid4().hex[:8]
     # First IP runs /admin -> /login
     for idx, (oid, ep, eid, score, ts) in enumerate(
         [
-            ("obs-churn-a1", "/admin", 10, 15, "2026-11-26T12:10:01Z"),
-            ("obs-churn-a2", "/login", 11, 50, "2026-11-26T12:10:02Z"),
+            (f"obs-churn-{tag}-a1", "/admin", 10, 15, "2026-11-26T12:10:01Z"),
+            (f"obs-churn-{tag}-a2", "/login", 11, 50, "2026-11-26T12:10:02Z"),
         ],
         start=1,
     ):
@@ -113,8 +116,8 @@ def test_ip_churn_roaming_fingerprint_match():
     # Second IP immediately exhibits identical /admin -> /login fingerprint
     for idx, (oid, ep, eid, score, ts) in enumerate(
         [
-            ("obs-churn-b1", "/admin", 10, 15, "2026-11-26T12:10:20Z"),
-            ("obs-churn-b2", "/login", 11, 50, "2026-11-26T12:10:21Z"),
+            (f"obs-churn-{tag}-b1", "/admin", 10, 15, "2026-11-26T12:10:20Z"),
+            (f"obs-churn-{tag}-b2", "/login", 11, 50, "2026-11-26T12:10:21Z"),
         ],
         start=1,
     ):

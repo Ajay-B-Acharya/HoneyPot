@@ -108,6 +108,7 @@ static bool WiFi_ConnectAP(void)
 
     char ip_str[16];
     WPL_GetIP(ip_str, 1);
+    Telemetry_SetDeviceIp(ip_str);
     Telemetry_SetWifiConnected(true);
     PRINTF("[Wi-Fi] Associated successfully! Local IP: %s\r\n", ip_str);
     return true;

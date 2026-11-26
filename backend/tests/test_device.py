@@ -37,7 +37,7 @@ class TestDeviceStatus:
         assert len(data["devices"]) == 1
         device = data["devices"][0]
         assert device["device_id"] == "rw612-security-01"
-        assert device["status"] in ["active", "inactive"]
+        assert device["status"] in ["online", "connection_unstable", "offline", "not_registered"]
         assert device["last_seen"] is not None
         assert device["last_activity"] is not None
 
@@ -84,7 +84,7 @@ class TestDeviceStatus:
 
         response = client.get("/api/device/status")
         data = response.json()
-        assert data["devices"][0]["status"] == "inactive"
+        assert data["devices"][0]["status"] == "not_registered"
 
     def test_device_status_mixed_timestamps_and_activity(self, client):
         """Test that device status handles mixed activity and timestamp ordering safely."""

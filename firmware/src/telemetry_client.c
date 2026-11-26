@@ -35,6 +35,9 @@ static QueueHandle_t s_routine_queue = NULL;
 static volatile bool s_wifi_connected = false;
 static bool s_backend_online = true;
 static uint32_t s_monotonic_seq = 0;
+static uint32_t s_heartbeat_seq = 0;
+static uint32_t s_last_heartbeat_tick = 0;
+static char s_device_ip[48] = "0.0.0.0";
 
 static TelemetryStats_t s_tel_stats;
 
@@ -109,6 +112,14 @@ void Telemetry_SetWifiConnected(bool connected)
 bool Telemetry_IsWifiConnected(void)
 {
     return s_wifi_connected;
+}
+
+void Telemetry_SetDeviceIp(const char *ip_str)
+{
+    if (ip_str && ip_str[0] != '\0') {
+        strncpy(s_device_ip, ip_str, sizeof(s_device_ip) - 1U);
+        s_device_ip[sizeof(s_device_ip) - 1U] = '\0';
+    }
 }
 
 bool Telemetry_Enqueue(const RequestRecord_t *record)
@@ -379,6 +390,48 @@ static void ItemToRequestRecord(const TelemetryItem_t *item, RequestRecord_t *ou
     strncpy(out->ip_risk_level, item->ip_risk_level, sizeof(out->ip_risk_level) - 1U);
 }
 
+static void SendPeriodicHeartbeatIfDue(void)
+{
+    if (!s_wifi_connected) {
+        return;
+    }
+
+    uint32_t now_tick = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    if (s_heartbeat_seq > 0U && (uint32_t)(now_tick - s_last_heartbeat_tick) < TELEMETRY_HEARTBEAT_INTERVAL_MS) {
+        return;
+    }
+
+    s_last_heartbeat_tick = now_tick;
+    s_heartbeat_seq++;
+    uint32_t uptime_sec = now_tick / 1000U;
+    uint32_t free_heap = (uint32_t)xPortGetFreeHeapSize();
+
+    static char hb_buf[320];
+    snprintf(hb_buf, sizeof(hb_buf),
+             "{"
+             "\"device_id\":\"%s\","
+             "\"uptime_seconds\":%lu,"
+             "\"wifi_connected\":%s,"
+             "\"device_ip\":\"%s\","
+             "\"free_heap_bytes\":%lu,"
+             "\"firmware_version\":\"%s\","
+             "\"heartbeat_seq\":%lu"
+             "}",
+             HONEYPOT_DEVICE_ID,
+             (unsigned long)uptime_sec,
+             s_wifi_connected ? "true" : "false",
+             s_device_ip,
+             (unsigned long)free_heap,
+             HONEYPOT_FW_VERSION,
+             (unsigned long)s_heartbeat_seq);
+
+    if (SendHttpPayload("/api/device/heartbeat", hb_buf, NULL, 0U)) {
+        s_backend_online = true;
+    } else {
+        s_backend_online = false;
+    }
+}
+
 void Telemetry_Task(void *param)
 {
     (void)param;
@@ -389,6 +442,8 @@ void Telemetry_Task(void *param)
            BACKEND_HOST_IP, BACKEND_HOST_PORT);
 
     for (;;) {
+        SendPeriodicHeartbeatIfDue();
+
         /* 1. Priority-ordered dequeue: ALWAYS drain critical queue before routine queue */
         bool got_item = (xQueueReceive(s_critical_queue, &item, 0) == pdPASS);
         if (!got_item) {

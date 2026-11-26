@@ -26,6 +26,8 @@ class Settings(BaseSettings):
 
     # Device status threshold (seconds) - device considered "inactive" after this
     DEVICE_INACTIVE_THRESHOLD_SECONDS: int = 300
+    DEVICE_HEARTBEAT_UNSTABLE_SECONDS: int = 8
+    DEVICE_HEARTBEAT_OFFLINE_SECONDS: int = 15
 
     # Detection Engine Configuration
     DETECTION_ALLOWED_ENDPOINTS: str = "/status,/info,/config"

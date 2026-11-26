@@ -16,6 +16,7 @@
 #define TELEMETRY_ROUTINE_QUEUE_LENGTH 16U
 #define TELEMETRY_MAX_BATCH_SIZE       8U
 #define TELEMETRY_MIN_BATCH_SIZE       1U
+#define TELEMETRY_HEARTBEAT_INTERVAL_MS 5000U
 
 typedef struct {
     uint32_t seq_num;
@@ -62,6 +63,9 @@ bool Telemetry_Enqueue(const RequestRecord_t *record);
 /* Update Wi-Fi link state from WPL link callback */
 void Telemetry_SetWifiConnected(bool connected);
 bool Telemetry_IsWifiConnected(void);
+
+/* Set local STA IP address reported in device heartbeats */
+void Telemetry_SetDeviceIp(const char *ip_str);
 
 /* Compute adaptive retry/backoff interval (ms) from queue occupancy & failure streak */
 uint32_t Telemetry_ComputeAdaptiveBackoffMs(uint32_t queue_occ_pct, uint32_t failure_streak);

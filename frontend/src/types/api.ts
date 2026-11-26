@@ -19,7 +19,14 @@ export type SecurityEventType =
 
 export type RequestClassification = "normal" | "unusual" | "suspicious";
 
-export type DeviceState = "active" | "inactive" | "unknown";
+export type DeviceState =
+  | "online"
+  | "connection_unstable"
+  | "offline"
+  | "not_registered"
+  | "active"
+  | "inactive"
+  | "unknown";
 
 export interface RequestLog {
   id: number;
@@ -80,7 +87,14 @@ export interface DeviceStatusItem {
   device_id: string;
   status: DeviceState;
   last_seen: string | null;
+  last_heartbeat?: string | null;
   last_activity: string | null;
+  device_ip?: string | null;
+  uptime_seconds?: number | null;
+  wifi_connected?: boolean;
+  free_heap_bytes?: number | null;
+  firmware_version?: string | null;
+  heartbeat_seq?: number | null;
 }
 
 export interface DeviceStatusResponse {

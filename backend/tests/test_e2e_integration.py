@@ -426,8 +426,8 @@ class TestApiCompatibility:
         status_data = harness.get_device_status()
         assert len(status_data["devices"]) >= 1
         dev = status_data["devices"][0]
-        assert set(dev.keys()) == {"device_id", "status", "last_seen", "last_activity"}
-        assert dev["status"] in ("active", "inactive", "unknown")
+        assert {"device_id", "status", "last_seen", "last_activity"}.issubset(set(dev.keys()))
+        assert dev["status"] in ("online", "connection_unstable", "offline", "not_registered")
 
 
 # =============================================================================
