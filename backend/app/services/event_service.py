@@ -7,7 +7,11 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.security_event import SecurityEvent
-from app.schemas.security_event import SecurityEventCreate
+from app.schemas.security_event import (
+    BatchSyncResponse,
+    SecurityEventBatchCreate,
+    SecurityEventCreate,
+)
 
 
 def create_event(db: Session, event_data: SecurityEventCreate) -> SecurityEvent:
@@ -20,7 +24,21 @@ def create_event(db: Session, event_data: SecurityEventCreate) -> SecurityEvent:
     Returns:
         The created SecurityEvent ORM instance.
     """
+    if event_data.client_event_id:
+        existing = (
+            db.query(SecurityEvent)
+            .filter(SecurityEvent.client_event_id == event_data.client_event_id)
+            .first()
+        )
+        if existing:
+            return existing
+
+    meta = dict(event_data.metadata or {})
+    if event_data.client_event_id:
+        meta["client_event_id"] = event_data.client_event_id
+
     db_event = SecurityEvent(
+        client_event_id=event_data.client_event_id,
         timestamp=event_data.timestamp,
         device_id=event_data.device_id,
         event_type=event_data.event_type,
@@ -29,12 +47,66 @@ def create_event(db: Session, event_data: SecurityEventCreate) -> SecurityEvent:
         source_ip=event_data.source_ip,
         request_count=event_data.request_count,
         time_window_seconds=event_data.time_window_seconds,
-        metadata_json=json.dumps(event_data.metadata) if event_data.metadata else None,
+        metadata_json=json.dumps(meta) if meta else None,
     )
     db.add(db_event)
     db.commit()
     db.refresh(db_event)
     return db_event
+
+
+def create_events_batch(
+    db: Session, batch: SecurityEventBatchCreate
+) -> BatchSyncResponse:
+    """Batch reconcile security events idempotently.
+
+    Args:
+        db: Database session.
+        batch: Batch of security events from device.
+
+    Returns:
+        BatchSyncResponse with received, inserted, and duplicate counts.
+    """
+    inserted = 0
+    duplicates = 0
+
+    for item in batch.events:
+        if item.client_event_id:
+            existing = (
+                db.query(SecurityEvent)
+                .filter(SecurityEvent.client_event_id == item.client_event_id)
+                .first()
+            )
+            if existing:
+                duplicates += 1
+                continue
+
+        meta = dict(item.metadata or {})
+        if item.client_event_id:
+            meta["client_event_id"] = item.client_event_id
+
+        db_event = SecurityEvent(
+            client_event_id=item.client_event_id,
+            timestamp=item.timestamp,
+            device_id=item.device_id,
+            event_type=item.event_type,
+            severity=item.severity.value,
+            description=item.description,
+            source_ip=item.source_ip,
+            request_count=item.request_count,
+            time_window_seconds=item.time_window_seconds,
+            metadata_json=json.dumps(meta) if meta else None,
+        )
+        db.add(db_event)
+        inserted += 1
+
+    db.commit()
+    return BatchSyncResponse(
+        received=len(batch.events),
+        inserted=inserted,
+        duplicates=duplicates,
+        status="reconciled",
+    )
 
 
 def get_events(

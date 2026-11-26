@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas.security_event import (
+    BatchSyncResponse,
+    SecurityEventBatchCreate,
     SecurityEventCreate,
     SecurityEventPaginatedResponse,
     SecurityEventResponse,
@@ -45,6 +47,21 @@ async def create_security_event(
         "created_at": db_event.created_at,
     }
     return SecurityEventResponse.model_validate(response_data)
+
+
+@router.post(
+    "/batch",
+    response_model=BatchSyncResponse,
+    status_code=201,
+    summary="Batch synchronize security events",
+    description="Synchronize a batch of locally stored events after network restoration.",
+)
+async def batch_reconcile_events(
+    batch_data: SecurityEventBatchCreate,
+    db: Session = Depends(get_db),
+) -> BatchSyncResponse:
+    """Batch reconcile security events idempotently."""
+    return event_service.create_events_batch(db, batch_data)
 
 
 @router.get(

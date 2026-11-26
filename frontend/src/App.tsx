@@ -6,6 +6,8 @@ import {
   fetchDeviceStatuses,
   fetchSecurityEvents,
   fetchRequestLogs,
+  fetchIPProfiles,
+  fetchDeviceMemoryStats,
 } from "./services/api";
 import {
   HealthResponse,
@@ -13,12 +15,16 @@ import {
   DeviceStatusResponse,
   SecurityEvent,
   RequestLog,
+  IPProfile,
+  DeviceMemoryStats,
 } from "./types/api";
 import { BackendStatus } from "./components/BackendStatus";
 import { DeviceStatusCard } from "./components/DeviceStatusCard";
 import { StatsOverview } from "./components/StatsOverview";
+import { MemoryDiagnosticsCard } from "./components/MemoryDiagnosticsCard";
 import { SecurityEventsTable } from "./components/SecurityEventsTable";
 import { RequestLogsTable } from "./components/RequestLogsTable";
+import { IPProfilesTable } from "./components/IPProfilesTable";
 import { TestingPanel } from "./components/TestingPanel";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { HeroSection } from "./components/HeroSection";
@@ -31,6 +37,8 @@ export const App: React.FC = () => {
   const [deviceData, setDeviceData] = useState<DeviceStatusResponse | null>(null);
   const [events, setEvents] = useState<SecurityEvent[]>([]);
   const [logs, setLogs] = useState<RequestLog[]>([]);
+  const [ipProfiles, setIpProfiles] = useState<IPProfile[]>([]);
+  const [memoryStats, setMemoryStats] = useState<DeviceMemoryStats | null>(null);
 
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -64,11 +72,13 @@ export const App: React.FC = () => {
       }
 
       // 2. Fetch all telemetry concurrently if backend is online
-      const [statsRes, devicesRes, eventsRes, logsRes] = await Promise.allSettled([
+      const [statsRes, devicesRes, eventsRes, logsRes, profilesRes, memoryRes] = await Promise.allSettled([
         fetchDashboardStats(),
         fetchDeviceStatuses(),
         fetchSecurityEvents({ limit: 20 }),
         fetchRequestLogs({ limit: 20 }),
+        fetchIPProfiles({ limit: 20 }),
+        fetchDeviceMemoryStats(),
       ]);
 
       if (statsRes.status === "fulfilled") {
@@ -82,6 +92,12 @@ export const App: React.FC = () => {
       }
       if (logsRes.status === "fulfilled") {
         setLogs(logsRes.value.items);
+      }
+      if (profilesRes.status === "fulfilled") {
+        setIpProfiles(profilesRes.value.items);
+      }
+      if (memoryRes.status === "fulfilled") {
+        setMemoryStats(memoryRes.value);
       }
 
       setLastRefresh(new Date());
@@ -202,6 +218,9 @@ export const App: React.FC = () => {
       {/* Aggregated Statistics Cards */}
       <StatsOverview stats={stats} loading={loading} />
 
+      {/* FRDM-RW612 Memory Diagnostics & Threat Preservation */}
+      <MemoryDiagnosticsCard stats={memoryStats} loading={loading} />
+
       {/* Main Events & Logs Grid */}
       <div className="main-grid">
         <SecurityEventsTable
@@ -215,6 +234,13 @@ export const App: React.FC = () => {
           error={error}
         />
       </div>
+
+      {/* Behavioral IP Profiles Table */}
+      <IPProfilesTable
+        profiles={ipProfiles}
+        loading={loading}
+        error={error}
+      />
 
       {/* Real-time Testing & Validation Panel */}
       <TestingPanel

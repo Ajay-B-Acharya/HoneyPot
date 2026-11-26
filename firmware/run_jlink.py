@@ -1,8 +1,16 @@
 import subprocess
 import time
+import threading
 import sys
 
 cmd_file = sys.argv[1] if len(sys.argv) > 1 else r"C:\Projects\IOT honey pot monitoring\firmware\status.jlink"
+
+stop_watch = threading.Event()
+
+def watcher():
+    while not stop_watch.is_set():
+        subprocess.run(["taskkill", "/F", "/IM", "JLinkGUIServer.exe"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        time.sleep(0.2)
 
 p = subprocess.Popen(
     [
@@ -18,11 +26,9 @@ p = subprocess.Popen(
     text=True
 )
 
-for _ in range(30):
-    subprocess.run(["powershell", "-Command", "Stop-Process -Name 'JLinkGUIServer' -Force -ErrorAction SilentlyContinue"], capture_output=True)
-    if p.poll() is not None:
-        break
-    time.sleep(0.5)
+w = threading.Thread(target=watcher, daemon=True)
+w.start()
 
 out, _ = p.communicate()
+stop_watch.set()
 print(out)

@@ -20,7 +20,8 @@ typedef enum {
     EVENT_UNKNOWN_ENDPOINT,
     EVENT_HIGH_REQUEST_RATE,
     EVENT_REPEATED_REQUESTS,
-    EVENT_MALFORMED_METADATA
+    EVENT_MALFORMED_METADATA,
+    EVENT_ATTACK_SEQUENCE
 } SecurityEventType_t;
 
 typedef struct {
@@ -33,6 +34,8 @@ typedef struct {
     SecurityEventType_t triggered_event;
     EventSeverity_t severity;
     char event_description[128];
+    uint8_t ip_threat_score;
+    char ip_risk_level[16];
 } RequestRecord_t;
 
 /* Initialize edge detection tracking state */

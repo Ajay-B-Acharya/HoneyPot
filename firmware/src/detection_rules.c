@@ -176,6 +176,7 @@ const char *Detection_GetEventString(SecurityEventType_t event_type)
         case EVENT_HIGH_REQUEST_RATE:   return "high_request_rate";
         case EVENT_REPEATED_REQUESTS:   return "repeated_requests";
         case EVENT_MALFORMED_METADATA:  return "malformed_request";
+        case EVENT_ATTACK_SEQUENCE:     return "attack_sequence";
         default:                        return "normal_traffic";
     }
 }

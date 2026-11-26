@@ -8,7 +8,7 @@ stop_event = threading.Event()
 
 def reader():
     try:
-        with serial.Serial("COM7", 115200, timeout=0.5) as ser:
+        with serial.Serial("COM7", 115200, timeout=0.2) as ser:
             while not stop_event.is_set():
                 line = ser.readline()
                 if line:
@@ -23,6 +23,15 @@ t.start()
 time.sleep(1.0)
 
 print("Triggering reset via J-Link...")
+stop_watch = threading.Event()
+def watcher():
+    while not stop_watch.is_set():
+        subprocess.run(["taskkill", "/F", "/IM", "JLinkGUIServer.exe"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        time.sleep(0.2)
+
+w = threading.Thread(target=watcher, daemon=True)
+w.start()
+
 p = subprocess.Popen(
     [
         r"C:\Program Files\SEGGER\JLink_V980\JLink.exe",
@@ -37,17 +46,12 @@ p = subprocess.Popen(
     text=True
 )
 
-for _ in range(15):
-    subprocess.run(["powershell", "-Command", "Stop-Process -Name 'JLinkGUIServer' -Force -ErrorAction SilentlyContinue"], capture_output=True)
-    if p.poll() is not None:
-        break
-    time.sleep(0.5)
-
 out, _ = p.communicate()
-print("J-Link reset output:\n", out)
+stop_watch.set()
+print("Reset triggered.")
 
-print("Listening for 15 seconds...")
-time.sleep(15.0)
+print("Listening on COM7 for 20 seconds...")
+time.sleep(20.0)
 stop_event.set()
 t.join(timeout=2.0)
 

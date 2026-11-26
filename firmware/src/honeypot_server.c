@@ -5,6 +5,10 @@
 #include "honeypot_server.h"
 #include "honeypot_config.h"
 #include "detection_rules.h"
+#include "ip_profile.h"
+#include "sequence_detection.h"
+#include "threat_memory_manager.h"
+#include "offline_buffer.h"
 #include "telemetry_client.h"
 
 #include "FreeRTOS.h"
@@ -19,8 +23,8 @@
 static void HandleHttpClient(int client_sock, struct sockaddr_in *client_addr)
 {
     char rx_buffer[1024];
-    char resp_body[256];
-    char http_resp[512];
+    char resp_body[512];
+    char http_resp[768];
 
     struct timeval tv;
     tv.tv_sec = 3;
@@ -70,14 +74,71 @@ static void HandleHttpClient(int client_sock, struct sockaddr_in *client_addr)
     /* Evaluate Threat Rules on Board */
     Detection_Evaluate(&record);
 
+    /* Update Behavioral IP Profile on FRDM-RW612 */
+    IPProfile_t *profile = IPProfile_GetOrCreate(record.source_ip, record.timestamp_tick);
+    if (profile != NULL) {
+        IPProfile_Update(profile, &record);
+
+        /* Evaluate Multi-Stage Attack Sequences */
+        uint8_t seq_threat_delta = 0;
+        char seq_desc[128] = "";
+        AttackPattern_t pattern = Sequence_Evaluate(&profile->sequence_history,
+                                                    record.endpoint,
+                                                    record.timestamp_tick,
+                                                    &seq_threat_delta,
+                                                    seq_desc,
+                                                    sizeof(seq_desc));
+        if (pattern != PATTERN_NONE) {
+            uint32_t new_score = profile->threat_score + seq_threat_delta;
+            profile->threat_score = (new_score > 100) ? 100 : (uint8_t)new_score;
+            record.triggered_event = EVENT_ATTACK_SEQUENCE;
+            record.severity = (pattern == PATTERN_RECONNAISSANCE || pattern == PATTERN_CREDENTIAL_HUNT) ?
+                              SEV_CRITICAL : SEV_WARNING;
+            strncpy(record.event_description, seq_desc, sizeof(record.event_description) - 1);
+            PRINTF("[Sequence] ALERT: Pattern '%s' detected from %s (+%u score)\r\n",
+                   Sequence_GetPatternString(pattern), record.source_ip, seq_threat_delta);
+        }
+
+        record.ip_threat_score = profile->threat_score;
+        strncpy(record.ip_risk_level, IPProfile_GetRiskLevelString(profile->risk_level), sizeof(record.ip_risk_level) - 1);
+    }
+
     int status_code = 200;
     const char *status_text = "OK";
 
     if (strcmp(norm_path, "/status") == 0) {
         uint32_t uptime_sec = (record.timestamp_tick / 1000);
+        uint32_t active_ips = IPProfile_GetActiveCount();
+        MemoryPressureLevel_t pressure = ThreatMem_GetPressureLevel(active_ips);
         snprintf(resp_body, sizeof(resp_body),
-                 "{\"device_status\":\"ok\",\"uptime_sec\":%lu,\"device_id\":\"%s\",\"free_heap\":%u}\r\n",
-                 (unsigned long)uptime_sec, HONEYPOT_DEVICE_ID, (unsigned int)xPortGetFreeHeapSize());
+                 "{\"device_status\":\"ok\",\"uptime_sec\":%lu,\"device_id\":\"%s\",\"free_heap\":%u,"
+                 "\"active_ip_profiles\":%lu,\"mem_pressure\":\"%s\",\"pending_offline_events\":%lu}\r\n",
+                 (unsigned long)uptime_sec, HONEYPOT_DEVICE_ID, (unsigned int)xPortGetFreeHeapSize(),
+                 (unsigned long)active_ips, ThreatMem_GetPressureString(pressure),
+                 (unsigned long)OfflineBuffer_GetPendingCount());
+    } else if (strcmp(norm_path, "/memory") == 0) {
+        ThreatMemoryStats_t mem_stats;
+        ThreatMem_GetStats(&mem_stats, IPProfile_GetActiveCount());
+        OfflineBufferStats_t off_stats;
+        OfflineBuffer_GetStats(&off_stats);
+        snprintf(resp_body, sizeof(resp_body),
+                 "{\"device_id\":\"%s\",\"total_security_bss_bytes\":%lu,\"active_profiles\":%lu,"
+                 "\"max_profiles\":%lu,\"profile_bytes_used\":%lu,\"free_heap\":%lu,\"min_free_heap\":%lu,"
+                 "\"pressure_level\":\"%s\",\"evictions\":%lu,\"compressed_benign\":%lu,"
+                 "\"compressed_suspicious\":%lu,\"highest_evicted_score\":%u,\"pending_offline_events\":%lu}\r\n",
+                 HONEYPOT_DEVICE_ID,
+                 (unsigned long)mem_stats.total_security_bss_bytes,
+                 (unsigned long)mem_stats.active_profiles_count,
+                 (unsigned long)mem_stats.max_profiles_capacity,
+                 (unsigned long)mem_stats.profile_bytes_used,
+                 (unsigned long)mem_stats.free_heap_bytes,
+                 (unsigned long)mem_stats.min_ever_free_heap_bytes,
+                 ThreatMem_GetPressureString(mem_stats.pressure_level),
+                 (unsigned long)mem_stats.eviction_summary.total_evicted_count,
+                 (unsigned long)mem_stats.eviction_summary.evicted_benign_count,
+                 (unsigned long)mem_stats.eviction_summary.evicted_suspicious_count,
+                 mem_stats.eviction_summary.highest_evicted_threat_score,
+                 (unsigned long)off_stats.pending_count);
     } else if (strcmp(norm_path, "/info") == 0) {
         snprintf(resp_body, sizeof(resp_body),
                  "{\"vendor\":\"NXP Semiconductors\",\"model\":\"%s\",\"firmware\":\"%s\",\"device_id\":\"%s\"}\r\n",
@@ -110,9 +171,10 @@ static void HandleHttpClient(int client_sock, struct sockaddr_in *client_addr)
     }
     close(client_sock);
 
-    PRINTF("[Honeypot] %s %s from %s -> %d %s %s\r\n",
+    PRINTF("[Honeypot] %s %s from %s -> %d (Score: %u, Risk: %s) %s %s\r\n",
            record.method, record.endpoint, record.source_ip,
            record.response_code,
+           record.ip_threat_score, record.ip_risk_level,
            record.is_unknown_endpoint ? "[ALERT: Unknown Endpoint]" : "",
            record.triggered_event == EVENT_HIGH_REQUEST_RATE ? "[ALERT: High Rate]" : "");
 

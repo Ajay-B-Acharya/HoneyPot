@@ -1,5 +1,5 @@
 import React from "react";
-import { ShieldAlert, AlertTriangle, AlertOctagon, Info } from "lucide-react";
+import { ShieldAlert, AlertTriangle, AlertOctagon, Info, GitCommit, ArrowRight } from "lucide-react";
 import { SecurityEvent } from "../types/api";
 
 interface SecurityEventsTableProps {
@@ -85,10 +85,34 @@ export const SecurityEventsTable: React.FC<SecurityEventsTableProps> = ({
                       {new Date(evt.timestamp).toLocaleTimeString()}
                     </td>
                     <td>
-                      <span className="badge badge-info">{evt.event_type}</span>
+                      {evt.event_type === "attack_sequence" ? (
+                        <span className="badge badge-critical" style={{ background: "#4c0519", color: "#f43f5e" }}>
+                          <GitCommit size={12} style={{ marginRight: "3px" }} />
+                          {evt.metadata?.pattern ?? "attack_sequence"}
+                        </span>
+                      ) : (
+                        <span className="badge badge-info">{evt.event_type}</span>
+                      )}
                     </td>
                     <td>{getSeverityBadge(evt.severity)}</td>
-                    <td className="mono-cell">{endpoint}</td>
+                    <td className="mono-cell">
+                      {evt.metadata && Array.isArray(evt.metadata.sequence) ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "2px", flexWrap: "wrap" }}>
+                          {(evt.metadata.sequence as string[]).map((step: string, idx: number, arr: string[]) => (
+                            <React.Fragment key={idx}>
+                              <span style={{ fontSize: "0.6875rem", background: "var(--border-color)", padding: "1px 4px", borderRadius: "3px" }}>
+                                {step}
+                              </span>
+                              {idx < arr.length - 1 && (
+                                <ArrowRight size={10} style={{ color: "var(--text-muted)" }} />
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </div>
+                      ) : (
+                        endpoint
+                      )}
+                    </td>
                     <td className="mono-cell">{evt.source_ip ?? "None"}</td>
                     <td title={evt.description} style={{ maxWidth: "320px" }}>
                       {evt.description}

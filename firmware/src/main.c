@@ -23,11 +23,15 @@
 
 #include "honeypot_config.h"
 #include "detection_rules.h"
+#include "ip_profile.h"
 #include "honeypot_server.h"
 #include "telemetry_client.h"
 
 #include <stdio.h>
 #include <string.h>
+
+/* External Wi-Fi driver functions */
+extern int wlan_set_country_ie_ignore(uint8_t *ignore);
 
 /* Link state callback */
 static void LinkStatusChangeCallback(bool linkState)
@@ -60,6 +64,7 @@ static bool WiFi_ConnectAP(void)
         return false;
     }
     PRINTF("[Wi-Fi] WPL module started successfully.\r\n");
+    vTaskDelay(pdMS_TO_TICKS(1000));
 
     PRINTF("[Wi-Fi] Adding AP network credentials: %s\r\n", HONEYPOT_WIFI_SSID);
     result = WPL_AddNetwork(HONEYPOT_WIFI_SSID, HONEYPOT_WIFI_PASS, HONEYPOT_WIFI_LABEL);
@@ -69,9 +74,21 @@ static bool WiFi_ConnectAP(void)
         return false;
     }
 
+    PRINTF("[Wi-Fi] Configuring regulatory domain policy...\r\n");
+    uint8_t ignore_ie = 1;
+    (void)wlan_set_country_ie_ignore(&ignore_ie);
+
     PRINTF("[Wi-Fi] Joining network '%s'...\r\n", HONEYPOT_WIFI_SSID);
-    result = WPL_Join(HONEYPOT_WIFI_LABEL);
-    PRINTF("[Wi-Fi] WPL_Join returned %ld\r\n", (long)result);
+    for (int retry = 1; retry <= 3; retry++) {
+        result = WPL_Join(HONEYPOT_WIFI_LABEL);
+        PRINTF("[Wi-Fi] WPL_Join attempt %d returned %ld\r\n", retry, (long)result);
+        if (result == WPLRET_SUCCESS) {
+            break;
+        }
+        if (retry < 3) {
+            vTaskDelay(pdMS_TO_TICKS(3000));
+        }
+    }
     if (result != WPLRET_SUCCESS) {
         PRINTF("[Wi-Fi] Association failed (code %ld). Running in standalone honeypot mode.\r\n", (long)result);
         return false;
@@ -97,6 +114,7 @@ static void Main_Supervisor_Task(void *arg)
 
     /* 1. Initialize Edge Detection System */
     Detection_Init();
+    IPProfile_Init();
 
     /* 2. Initialize Telemetry Dispatcher */
     if (!Telemetry_Init()) {
@@ -109,23 +127,27 @@ static void Main_Supervisor_Task(void *arg)
     /* 4. Start Telemetry Dispatcher Task */
     BaseType_t status = xTaskCreate(Telemetry_Task,
                                     "telemetry_tx",
-                                    2048,
+                                    1024,
                                     NULL,
-                                    configMAX_PRIORITIES - 5,
+                                    3,
                                     NULL);
     if (status != pdPASS) {
         PRINTF("[Main] Failed to create Telemetry Dispatcher Task!\r\n");
+    } else {
+        PRINTF("[Main] Telemetry Dispatcher Task started successfully.\r\n");
     }
 
     /* 5. Start Honeypot HTTP Server Task */
     status = xTaskCreate(Honeypot_Server_Task,
                          "honeypot_srv",
-                         2048,
+                         1536,
                          NULL,
-                         configMAX_PRIORITIES - 4,
+                         3,
                          NULL);
     if (status != pdPASS) {
         PRINTF("[Main] Failed to create Honeypot Server Task!\r\n");
+    } else {
+        PRINTF("[Main] Honeypot Server Task started successfully.\r\n");
     }
 
     PRINTF("[Main] All honeypot services active. Awaiting network interactions.\r\n");

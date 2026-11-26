@@ -17,6 +17,7 @@ class SeverityEnum(str, Enum):
 
 class SecurityEventCreate(BaseModel):
     """Schema for creating a new security event."""
+    client_event_id: str | None = Field(None, max_length=64, description="Deterministic edge event ID")
     timestamp: datetime = Field(..., description="UTC timestamp of the event")
     device_id: str = Field(..., min_length=1, max_length=128, description="Device identifier")
     event_type: str = Field(..., min_length=1, max_length=64, description="Event classification")
@@ -69,6 +70,19 @@ class SecurityEventResponse(BaseModel):
             except (json.JSONDecodeError, TypeError):
                 return None
         return v
+
+
+class SecurityEventBatchCreate(BaseModel):
+    """Schema for batch synchronizing security events from device."""
+    events: list[SecurityEventCreate] = Field(..., min_length=1, max_length=100)
+
+
+class BatchSyncResponse(BaseModel):
+    """Schema for batch synchronization response."""
+    received: int
+    inserted: int
+    duplicates: int
+    status: str = "reconciled"
 
 
 class SecurityEventPaginatedResponse(BaseModel):

@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.database import init_db
-from app.routers import device, events, health, logs, stats
+from app.routers import device, events, health, ip_profiles, logs, memory, stats
 
 
 @asynccontextmanager
@@ -54,6 +54,8 @@ def create_app() -> FastAPI:
     app.include_router(logs.router, prefix="/api")
     app.include_router(stats.router, prefix="/api")
     app.include_router(device.router, prefix="/api")
+    app.include_router(ip_profiles.router, prefix="/api")
+    app.include_router(memory.router, prefix="/api")
 
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):

@@ -14,6 +14,9 @@ class SecurityEvent(Base):
     __tablename__ = "security_events"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    client_event_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, unique=True, index=True, doc="Deterministic edge event ID for idempotent reconciliation"
+    )
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True
     )

@@ -3,6 +3,7 @@
  */
 
 #include "telemetry_client.h"
+#include "offline_buffer.h"
 #include "honeypot_config.h"
 
 #include "FreeRTOS.h"
@@ -17,12 +18,16 @@
 #include <string.h>
 
 static QueueHandle_t s_telemetry_queue = NULL;
+static bool s_backend_online = true;
+static uint32_t s_backoff_ms = 1000;
 
 bool Telemetry_Init(void)
 {
     if (s_telemetry_queue != NULL) {
         return true;
     }
+
+    OfflineBuffer_Init();
 
     s_telemetry_queue = xQueueCreate(TELEMETRY_QUEUE_LENGTH, sizeof(RequestRecord_t));
     if (s_telemetry_queue == NULL) {
@@ -112,6 +117,66 @@ static bool SendHttpPayload(const char *path, const char *json_payload)
     return false;
 }
 
+static void ReconcileOfflineEvents(void)
+{
+    if (OfflineBuffer_GetPendingCount() == 0) {
+        return;
+    }
+
+    OfflineBuffer_SetReconciling(true);
+    PRINTF("[Telemetry] Starting offline reconciliation (%lu pending events)...\r\n",
+           (unsigned long)OfflineBuffer_GetPendingCount());
+
+    OfflineEvent_t batch[4];
+    char batch_buf[2048];
+
+    while (OfflineBuffer_GetPendingCount() > 0) {
+        uint32_t count = OfflineBuffer_GetBatch(batch, 4);
+        if (count == 0) {
+            break;
+        }
+
+        int offset = snprintf(batch_buf, sizeof(batch_buf), "{\"events\":[");
+        for (uint32_t i = 0; i < count; i++) {
+            offset += snprintf(batch_buf + offset, sizeof(batch_buf) - offset,
+                               "%s{"
+                               "\"client_event_id\":\"%s\","
+                               "\"timestamp\":\"2026-10-27T08:00:00Z\","
+                               "\"device_id\":\"%s\","
+                               "\"event_type\":\"%s\","
+                               "\"severity\":\"%s\","
+                               "\"description\":\"%s\","
+                               "\"source_ip\":\"%s\","
+                               "\"metadata\":{\"endpoint\":\"%s\",\"method\":\"%s\",\"threat_score\":%u,\"risk_level\":\"%s\"}"
+                               "}",
+                               (i > 0) ? "," : "",
+                               batch[i].client_event_id,
+                               HONEYPOT_DEVICE_ID,
+                               Detection_GetEventString(batch[i].event_type),
+                               Detection_GetSeverityString(batch[i].severity),
+                               batch[i].description,
+                               batch[i].source_ip,
+                               batch[i].endpoint,
+                               batch[i].method,
+                               batch[i].threat_score,
+                               batch[i].risk_level);
+            if (offset >= (int)sizeof(batch_buf) - 64) {
+                break;
+            }
+        }
+        snprintf(batch_buf + offset, sizeof(batch_buf) - offset, "]}");
+
+        if (SendHttpPayload("/api/events/batch", batch_buf)) {
+            OfflineBuffer_AckBatch(count);
+            vTaskDelay(pdMS_TO_TICKS(100)); /* Gentle pacing between batches */
+        } else {
+            PRINTF("[Telemetry] Batch reconciliation paused due to transmission failure.\r\n");
+            break;
+        }
+    }
+    OfflineBuffer_SetReconciling(false);
+}
+
 void Telemetry_Task(void *param)
 {
     (void)param;
@@ -141,23 +206,19 @@ void Telemetry_Task(void *param)
                      record.response_code,
                      record.is_unknown_endpoint ? "unusual" : "normal");
 
-            bool sent_ok = false;
+            bool log_sent = false;
             for (int attempt = 1; attempt <= TELEMETRY_MAX_RETRIES; attempt++) {
                 if (SendHttpPayload("/api/logs", json_buf)) {
-                    PRINTF("[Telemetry] Ingested log: %s %s -> HTTP %d\r\n",
-                           record.method, record.endpoint, record.response_code);
-                    sent_ok = true;
+                    log_sent = true;
                     break;
                 }
-                PRINTF("[Telemetry] Log dispatch retry %d/%d...\r\n", attempt, TELEMETRY_MAX_RETRIES);
-                vTaskDelay(pdMS_TO_TICKS(1000 * attempt));
-            }
-            if (!sent_ok) {
-                PRINTF("[Telemetry] Warning: Log dispatch failed after all retries.\r\n");
+                vTaskDelay(pdMS_TO_TICKS(500 * attempt));
             }
 
-            /* 2. If a security anomaly occurred, dispatch POST /api/events */
+            /* 2. Dispatch security event if triggered */
+            bool event_sent = true;
             if (record.triggered_event != EVENT_NONE) {
+                event_sent = false;
                 snprintf(json_buf, sizeof(json_buf),
                          "{"
                          "\"timestamp\":\"2026-10-27T08:00:00Z\","
@@ -166,7 +227,7 @@ void Telemetry_Task(void *param)
                          "\"severity\":\"%s\","
                          "\"description\":\"%s\","
                          "\"source_ip\":\"%s\","
-                         "\"metadata\":{\"endpoint\":\"%s\",\"method\":\"%s\"}"
+                         "\"metadata\":{\"endpoint\":\"%s\",\"method\":\"%s\",\"threat_score\":%u,\"risk_level\":\"%s\"}"
                          "}",
                          HONEYPOT_DEVICE_ID,
                          Detection_GetEventString(record.triggered_event),
@@ -174,16 +235,44 @@ void Telemetry_Task(void *param)
                          record.event_description,
                          record.source_ip,
                          record.endpoint,
-                         record.method);
+                         record.method,
+                         record.ip_threat_score,
+                         record.ip_risk_level);
 
                 for (int attempt = 1; attempt <= TELEMETRY_MAX_RETRIES; attempt++) {
                     if (SendHttpPayload("/api/events", json_buf)) {
-                        PRINTF("[Telemetry] Alert dispatched! Type: %s, Sev: %s\r\n",
-                               Detection_GetEventString(record.triggered_event),
-                               Detection_GetSeverityString(record.severity));
+                        event_sent = true;
                         break;
                     }
-                    vTaskDelay(pdMS_TO_TICKS(1000 * attempt));
+                    vTaskDelay(pdMS_TO_TICKS(500 * attempt));
+                }
+            }
+
+            /* 3. Handle Offline Continuity & State Reconciliation */
+            if (!log_sent || !event_sent) {
+                /* Backend is currently offline */
+                if (s_backend_online) {
+                    s_backend_online = false;
+                    PRINTF("[Telemetry] Backend unreachable. Entering OFFLINE detection mode.\r\n");
+                }
+
+                /* Store security event in bounded local offline buffer */
+                if (record.triggered_event != EVENT_NONE) {
+                    OfflineBuffer_Push(&record);
+                }
+
+                /* Apply exponential backoff delay (max 30s) */
+                s_backoff_ms = (s_backoff_ms < 15000) ? (s_backoff_ms * 2) : 30000;
+                vTaskDelay(pdMS_TO_TICKS(s_backoff_ms));
+            } else {
+                /* Telemetry dispatched successfully */
+                if (!s_backend_online) {
+                    s_backend_online = true;
+                    s_backoff_ms = 1000;
+                    PRINTF("[Telemetry] Connectivity restored! Initiating state reconciliation...\r\n");
+                    ReconcileOfflineEvents();
+                } else if (OfflineBuffer_GetPendingCount() > 0) {
+                    ReconcileOfflineEvents();
                 }
             }
         }

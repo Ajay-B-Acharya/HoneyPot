@@ -374,6 +374,14 @@ class DetectionService:
             )
             generated_events.append(r3_event)
 
+        # ---------------------------------------------------------------------
+        # RULE R5: Multi-Stage Attack Sequence Detection
+        # ---------------------------------------------------------------------
+        from app.services.sequence_service import get_sequence_service
+        seq_event = get_sequence_service().evaluate_request(log, current_time=epoch_sec)
+        if seq_event is not None:
+            generated_events.append(seq_event)
+
         return generated_events
 
     def process_request_log(
@@ -441,3 +449,5 @@ def reset_detection_service() -> None:
         if _detection_service_instance is not None:
             _detection_service_instance.reset_state()
             _detection_service_instance = None
+    from app.services.sequence_service import reset_sequence_service
+    reset_sequence_service()

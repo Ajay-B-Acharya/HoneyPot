@@ -14,6 +14,7 @@ export type SecurityEventType =
   | "unknown_endpoint"
   | "high_request_rate"
   | "repeated_requests"
+  | "attack_sequence"
   | string;
 
 export type RequestClassification = "normal" | "unusual" | "suspicious";
@@ -106,4 +107,66 @@ export interface CreateSecurityEventPayload {
   request_count?: number | null;
   time_window_seconds?: number | null;
   metadata?: Record<string, any> | null;
+}
+
+export type RiskLevel = "low" | "medium" | "high" | "critical";
+
+export interface IPProfile {
+  id: number;
+  ip_address: string;
+  device_id: string;
+  total_requests: number;
+  suspicious_requests: number;
+  repeated_requests: number;
+  unique_endpoints_count: number;
+  unique_endpoints: string[];
+  request_frequency: number;
+  threat_score: number;
+  risk_level: RiskLevel;
+  first_seen: string;
+  last_seen: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IPProfileSummary {
+  total_profiles: number;
+  active_profiles: number;
+  critical_threats: number;
+  high_threats: number;
+  medium_threats: number;
+  low_threats: number;
+  top_threat_ip: string | null;
+  max_threat_score: number;
+}
+
+export interface ThreatEvictionSummary {
+  total_evicted_count: number;
+  evicted_benign_count: number;
+  evicted_suspicious_count: number;
+  aggregate_evicted_requests: number;
+  aggregate_suspicious_requests: number;
+  highest_evicted_threat_score: number;
+  last_evicted_ip: string | null;
+}
+
+export interface DeviceMemoryStats {
+  device_id: string;
+  total_security_bss_bytes: number;
+  active_profiles: number;
+  max_profiles: number;
+  profile_bytes_used: number;
+  free_heap_bytes: number;
+  min_ever_free_heap_bytes: number;
+  pressure_level: "normal" | "moderate" | "high" | "critical";
+  pending_offline_events: number;
+  eviction_summary: ThreatEvictionSummary;
+}
+
+export interface BatchSyncResponse {
+  received: number;
+  inserted: number;
+  duplicates: number;
+  status: string;
 }

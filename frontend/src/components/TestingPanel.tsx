@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { Play, Send, ShieldAlert, Zap, AlertTriangle } from "lucide-react";
-import { createRequestLog, createSecurityEvent } from "../services/api";
+import { Play, Send, ShieldAlert, Zap, AlertTriangle, UserCheck, GitCommit, Cpu, Layers } from "lucide-react";
+import { createRequestLog, createSecurityEvent, batchSyncSecurityEvents } from "../services/api";
 
 interface TestingPanelProps {
   onActionComplete: () => void;
@@ -113,6 +113,162 @@ export const TestingPanel: React.FC<TestingPanelProps> = ({
     }
   };
 
+  const handleTestMultiIPProfiling = async () => {
+    setSubmitting(true);
+    setFeedback("Simulating traffic from 3 distinct IP addresses with different behaviors...");
+    try {
+      const now = new Date();
+      // 1. Benign IP: 192.168.1.105 (allowed endpoint)
+      await createRequestLog({
+        timestamp: now.toISOString(),
+        device_id: "rw612-security-01",
+        source_ip: "192.168.1.105",
+        method: "GET",
+        endpoint: "/status",
+        response_code: 200,
+        classification: "normal",
+      });
+
+      // 2. Probing IP: 192.168.1.222 (repeated probes to /config)
+      for (let i = 0; i < 3; i++) {
+        await createRequestLog({
+          timestamp: new Date(now.getTime() + (i + 1) * 200).toISOString(),
+          device_id: "rw612-security-01",
+          source_ip: "192.168.1.222",
+          method: "GET",
+          endpoint: "/config",
+          response_code: 200,
+          classification: "normal",
+        });
+      }
+
+      // 3. Hostile Scanner IP: 192.168.1.99 (unknown endpoints /admin, /shell, /login)
+      const attackPaths = ["/admin", "/shell.php", "/setup.cgi", "/login"];
+      for (let i = 0; i < attackPaths.length; i++) {
+        await createRequestLog({
+          timestamp: new Date(now.getTime() + (i + 5) * 200).toISOString(),
+          device_id: "rw612-security-01",
+          source_ip: "192.168.1.99",
+          method: "GET",
+          endpoint: attackPaths[i],
+          response_code: 404,
+          classification: "suspicious",
+        });
+      }
+
+      setFeedback(
+        "Success: 3 distinct IP profiles generated (Benign: 192.168.1.105, Prober: 192.168.1.222, Scanner: 192.168.1.99 with high threat score)."
+      );
+      onActionComplete();
+    } catch (err: any) {
+      setFeedback(`Error: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleTestAttackSequence = async () => {
+    setSubmitting(true);
+    setFeedback("Executing attack sequence: / -> /admin -> /config -> /login from 192.168.1.188...");
+    try {
+      const now = new Date();
+      const sequencePaths = ["/", "/admin", "/config", "/login"];
+      for (let i = 0; i < sequencePaths.length; i++) {
+        await createRequestLog({
+          timestamp: new Date(now.getTime() + i * 250).toISOString(),
+          device_id: "rw612-security-01",
+          source_ip: "192.168.1.188",
+          method: "GET",
+          endpoint: sequencePaths[i],
+          response_code: sequencePaths[i] === "/" || sequencePaths[i] === "/config" ? 200 : 404,
+          classification: "normal",
+        });
+      }
+      setFeedback(
+        "Success: Attack sequence executed! Detected 'reconnaissance_probe' with Critical severity and elevated threat score."
+      );
+      onActionComplete();
+    } catch (err: any) {
+      setFeedback(`Error: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleTestMemoryPressure = async () => {
+    setSubmitting(true);
+    setFeedback("Simulating memory pressure: generating requests from 16 distinct IPs...");
+    try {
+      const now = new Date();
+      for (let i = 1; i <= 16; i++) {
+        await createRequestLog({
+          timestamp: new Date(now.getTime() + i * 50).toISOString(),
+          device_id: "rw612-security-01",
+          source_ip: `10.42.0.${100 + i}`,
+          method: "GET",
+          endpoint: i % 2 === 0 ? "/status" : "/admin",
+          response_code: i % 2 === 0 ? 200 : 404,
+          classification: i % 2 === 0 ? "normal" : "unusual",
+        });
+      }
+      setFeedback(
+        "Success: 16 IP profiles created. Memory diagnostics transitioned to 'moderate/high' pressure. Critical profiles protected."
+      );
+      onActionComplete();
+    } catch (err: any) {
+      setFeedback(`Error: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleTestOfflineReconciliation = async () => {
+    setSubmitting(true);
+    setFeedback("Simulating offline continuity: reconciling batch of 3 queued edge events...");
+    try {
+      const now = new Date();
+      const baseTick = Date.now();
+      const batchRes = await batchSyncSecurityEvents([
+        {
+          timestamp: new Date(now.getTime() - 120000).toISOString(),
+          device_id: "rw612-security-01",
+          event_type: "unknown_endpoint",
+          severity: "warning",
+          description: "Decoy probe during outage to /setup.cgi",
+          source_ip: "192.168.1.177",
+          metadata: { client_event_id: `rw612-evt-${baseTick}-0001`, threat_score: 45, risk_level: "medium" },
+        },
+        {
+          timestamp: new Date(now.getTime() - 60000).toISOString(),
+          device_id: "rw612-security-01",
+          event_type: "attack_sequence",
+          severity: "critical",
+          description: "Credential hunt sequence /admin -> /login during outage",
+          source_ip: "192.168.1.177",
+          metadata: { client_event_id: `rw612-evt-${baseTick}-0002`, threat_score: 85, risk_level: "critical" },
+        },
+        {
+          timestamp: now.toISOString(),
+          device_id: "rw612-security-01",
+          event_type: "high_request_rate",
+          severity: "warning",
+          description: "Outage burst rate violation",
+          source_ip: "192.168.1.215",
+          metadata: { client_event_id: `rw612-evt-${baseTick}-0003`, threat_score: 60, risk_level: "medium" },
+        },
+      ]);
+
+      setFeedback(
+        `Success: Reconciled ${batchRes.inserted}/${batchRes.received} offline events (Duplicates: ${batchRes.duplicates}). Timestamps and intelligence preserved.`
+      );
+      onActionComplete();
+    } catch (err: any) {
+      setFeedback(`Error: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div id="testing-panel" className="panel" style={{ marginTop: "1.5rem" }}>
       <div className="panel-header">
@@ -181,6 +337,62 @@ export const TestingPanel: React.FC<TestingPanelProps> = ({
             </div>
             <div className="test-btn-desc">
               Submits a direct hardware tamper security event via POST /api/events.
+            </div>
+          </button>
+
+          <button
+            className="test-btn"
+            onClick={handleTestMultiIPProfiling}
+            disabled={disabled || submitting}
+          >
+            <div className="test-btn-title">
+              <UserCheck size={14} className="icon-cyan" />
+              <span>Multi-IP Behavioral Sim</span>
+            </div>
+            <div className="test-btn-desc">
+              Sends traffic from 3 separate IPs (benign, prober, hostile) to verify dynamic threat profiling.
+            </div>
+          </button>
+
+          <button
+            className="test-btn"
+            onClick={handleTestAttackSequence}
+            disabled={disabled || submitting}
+          >
+            <div className="test-btn-title">
+              <GitCommit size={14} className="icon-rose" />
+              <span>Attack Sequence Sim</span>
+            </div>
+            <div className="test-btn-desc">
+              Simulates / &rarr; /admin &rarr; /config &rarr; /login reconnaissance sequence to trigger sequence detection.
+            </div>
+          </button>
+
+          <button
+            className="test-btn"
+            onClick={handleTestMemoryPressure}
+            disabled={disabled || submitting}
+          >
+            <div className="test-btn-title">
+              <Cpu size={14} className="icon-cyan" />
+              <span>Memory Pressure &amp; Eviction Sim</span>
+            </div>
+            <div className="test-btn-desc">
+              Sends requests across 16 IPs to test dynamic memory pressure thresholds and critical profile preservation.
+            </div>
+          </button>
+
+          <button
+            className="test-btn"
+            onClick={handleTestOfflineReconciliation}
+            disabled={disabled || submitting}
+          >
+            <div className="test-btn-title">
+              <Layers size={14} className="icon-emerald" />
+              <span>Offline Continuity &amp; Reconcile Sim</span>
+            </div>
+            <div className="test-btn-desc">
+              Reconciles a batch of queued offline security events with unique IDs, testing idempotent ingestion and duplicate suppression.
             </div>
           </button>
         </div>

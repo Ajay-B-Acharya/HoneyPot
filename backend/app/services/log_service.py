@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.models.request_log import RequestLog
 from app.schemas.request_log import RequestLogCreate
 from app.services.detection_service import get_detection_service
+from app.services.ip_profile_service import record_ip_activity
 
 
 def create_log(db: Session, log_data: RequestLogCreate) -> RequestLog:
@@ -36,7 +37,8 @@ def create_log(db: Session, log_data: RequestLogCreate) -> RequestLog:
 
     try:
         detection_service = get_detection_service()
-        detection_service.process_request_log(db, db_log)
+        created_events = detection_service.process_request_log(db, db_log)
+        record_ip_activity(db, db_log, created_events)
         db.commit()
         db.refresh(db_log)
         return db_log
