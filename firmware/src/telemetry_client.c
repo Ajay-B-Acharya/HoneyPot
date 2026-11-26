@@ -208,7 +208,7 @@ static bool SendHttpPayload(const char *path, const char *json_payload, char *ou
         return false;
     }
 
-    char http_req[2560];
+    static char http_req[2560];
     int req_len = snprintf(http_req, sizeof(http_req),
                            "POST %s HTTP/1.1\r\n"
                            "Host: %s:%d\r\n"
@@ -229,7 +229,7 @@ static bool SendHttpPayload(const char *path, const char *json_payload, char *ou
         return false;
     }
 
-    char rx_buf[512];
+    static char rx_buf[512];
     int recvd = recv(sock, rx_buf, sizeof(rx_buf) - 1, 0);
     close(sock);
 
@@ -291,10 +291,10 @@ static void ReconcileOfflineEvents(void)
     }
 
     OfflineBuffer_SetReconciling(true);
-    OfflineEvent_t batch[TELEMETRY_MAX_BATCH_SIZE];
-    char batch_buf[2048];
-    char resp_body[512];
-    char acked_ids[TELEMETRY_MAX_BATCH_SIZE][48];
+    static OfflineEvent_t batch[TELEMETRY_MAX_BATCH_SIZE];
+    static char batch_buf[2048];
+    static char resp_body[512];
+    static char acked_ids[TELEMETRY_MAX_BATCH_SIZE][48];
 
     while (OfflineBuffer_GetPendingCount() > 0U && s_wifi_connected) {
         uint32_t req_batch = s_tel_stats.current_batch_size;

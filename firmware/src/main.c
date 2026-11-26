@@ -80,6 +80,16 @@ static bool WiFi_ConnectAP(void)
     uint8_t ignore_ie = 1;
     (void)wlan_set_country_ie_ignore(&ignore_ie);
 
+    PRINTF("[Wi-Fi] Diagnostic scan before join...\r\n");
+    char *scan_json = WPL_Scan();
+    if (scan_json != NULL) {
+        PRINTF("[Wi-Fi] WPL_Scan JSON: %s\r\n", scan_json);
+        vPortFree(scan_json);
+    } else {
+        PRINTF("[Wi-Fi] WPL_Scan returned NULL\r\n");
+    }
+    vTaskDelay(pdMS_TO_TICKS(500));
+
     PRINTF("[Wi-Fi] Joining network '%s'...\r\n", HONEYPOT_WIFI_SSID);
     for (int retry = 1; retry <= 3; retry++) {
         result = WPL_Join(HONEYPOT_WIFI_LABEL);
@@ -131,7 +141,7 @@ static void Main_Supervisor_Task(void *arg)
     /* 4. Start Telemetry Dispatcher Task */
     BaseType_t status = xTaskCreate(Telemetry_Task,
                                     "telemetry_tx",
-                                    1024,
+                                    1536,
                                     NULL,
                                     3,
                                     NULL);
