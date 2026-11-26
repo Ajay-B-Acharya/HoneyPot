@@ -49,9 +49,9 @@ typedef struct {
     uint8_t  recent_window_idx;
     uint16_t request_rate_per_min;
     
-    /* Endpoint tracking */
-    uint32_t endpoint_hashes[IP_PROFILE_MAX_UNIQUE_HASHES];
-    char last_endpoint[64];
+    /* Endpoint tracking (collision-safe compact endpoint IDs) */
+    uint16_t endpoint_ids[IP_PROFILE_MAX_UNIQUE_HASHES];
+    uint16_t last_endpoint_id;
     uint32_t consecutive_endpoint_count;
     
     /* Threat scoring */
@@ -88,5 +88,9 @@ const char *IPProfile_GetRiskLevelString(RiskLevel_t level);
 
 /* Calculate threat score based on behavioral parameters */
 uint8_t IPProfile_CalculateThreatScore(const IPProfile_t *profile);
+
+/* Thread-safe lock/unlock for shared IP profile table */
+void IPProfile_Lock(void);
+void IPProfile_Unlock(void);
 
 #endif /* IP_PROFILE_H_ */

@@ -4,29 +4,50 @@
 
 #include "ip_profile.h"
 #include "threat_memory_manager.h"
+#include "sequence_detection.h"
 #include "honeypot_config.h"
 #include <string.h>
 #include <stdio.h>
 
+#ifndef HOST_UNIT_TEST
+#include "FreeRTOS.h"
+#include "semphr.h"
+static SemaphoreHandle_t s_profile_mutex = NULL;
+#endif
+
 static IPProfile_t s_ip_profiles[IP_PROFILE_MAX_ENTRIES];
 static uint32_t s_active_count = 0;
 
-/* Simple DJB2 hash for endpoints */
-static uint32_t HashEndpoint(const char *str)
+void IPProfile_Lock(void)
 {
-    uint32_t hash = 5381;
-    int c;
-    while ((c = (unsigned char)*str++) != 0) {
-        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+#ifndef HOST_UNIT_TEST
+    if (s_profile_mutex != NULL) {
+        xSemaphoreTake(s_profile_mutex, portMAX_DELAY);
     }
-    return hash;
+#endif
+}
+
+void IPProfile_Unlock(void)
+{
+#ifndef HOST_UNIT_TEST
+    if (s_profile_mutex != NULL) {
+        xSemaphoreGive(s_profile_mutex);
+    }
+#endif
 }
 
 void IPProfile_Init(void)
 {
+#ifndef HOST_UNIT_TEST
+    if (s_profile_mutex == NULL) {
+        s_profile_mutex = xSemaphoreCreateMutex();
+    }
+#endif
+    IPProfile_Lock();
     memset(s_ip_profiles, 0, sizeof(s_ip_profiles));
     s_active_count = 0;
     ThreatMem_Init();
+    IPProfile_Unlock();
 }
 
 IPProfile_t *IPProfile_Lookup(const char *ip_str)
@@ -50,9 +71,7 @@ uint32_t IPProfile_ExpireInactive(uint32_t current_tick, uint32_t timeout_ms)
 
     for (uint32_t i = 0; i < IP_PROFILE_MAX_ENTRIES; i++) {
         if (s_ip_profiles[i].is_active) {
-            uint32_t elapsed = (current_tick >= s_ip_profiles[i].last_seen_tick) ?
-                               (current_tick - s_ip_profiles[i].last_seen_tick) :
-                               (0xFFFFFFFF - s_ip_profiles[i].last_seen_tick + current_tick);
+            uint32_t elapsed = (uint32_t)(current_tick - s_ip_profiles[i].last_seen_tick);
 
             if (elapsed >= timeout_ms && s_ip_profiles[i].threat_score < 70) {
                 /* Never expire active high-threat or critical profiles prematurely */
@@ -87,8 +106,10 @@ IPProfile_t *IPProfile_GetOrCreate(const char *ip_str, uint32_t current_tick)
             s_ip_profiles[i].is_active = true;
             s_ip_profiles[i].first_seen_tick = current_tick;
             s_ip_profiles[i].last_seen_tick = current_tick;
+            s_ip_profiles[i].last_endpoint_id = EP_ID_INVALID;
             s_ip_profiles[i].risk_level = RISK_LOW;
             s_active_count++;
+            ThreatMem_RecordPressureEvent(ThreatMem_GetPressureLevel(s_active_count));
             return &s_ip_profiles[i];
         }
     }
@@ -110,6 +131,7 @@ IPProfile_t *IPProfile_GetOrCreate(const char *ip_str, uint32_t current_tick)
     }
 
     /* 4. Memory-Aware Controlled Eviction: Select candidate with lowest priority */
+    ThreatMem_RecordPressureEvent(MEM_PRESSURE_CRITICAL);
     int32_t victim_idx = ThreatMem_SelectEvictionVictim(s_ip_profiles, IP_PROFILE_MAX_ENTRIES, current_tick);
     if (victim_idx < 0) {
         victim_idx = 0;
@@ -123,6 +145,7 @@ IPProfile_t *IPProfile_GetOrCreate(const char *ip_str, uint32_t current_tick)
     s_ip_profiles[victim_idx].is_active = true;
     s_ip_profiles[victim_idx].first_seen_tick = current_tick;
     s_ip_profiles[victim_idx].last_seen_tick = current_tick;
+    s_ip_profiles[victim_idx].last_endpoint_id = EP_ID_INVALID;
     s_ip_profiles[victim_idx].risk_level = RISK_LOW;
     return &s_ip_profiles[victim_idx];
 }
@@ -181,29 +204,28 @@ void IPProfile_Update(IPProfile_t *p, const RequestRecord_t *record)
     p->total_requests++;
     p->last_seen_tick = record->timestamp_tick;
 
-    /* 1. Track unique endpoints via DJB2 hash set */
-    uint32_t ep_hash = HashEndpoint(record->endpoint);
+    /* 1. Track unique endpoints via collision-safe compact endpoint IDs */
+    uint16_t ep_id = Sequence_ResolveEndpointId(record->endpoint, NULL);
     bool seen = false;
     for (uint32_t i = 0; i < p->unique_endpoints_count && i < IP_PROFILE_MAX_UNIQUE_HASHES; i++) {
-        if (p->endpoint_hashes[i] == ep_hash) {
+        if (p->endpoint_ids[i] == ep_id) {
             seen = true;
             break;
         }
     }
     if (!seen && p->unique_endpoints_count < IP_PROFILE_MAX_UNIQUE_HASHES) {
-        p->endpoint_hashes[p->unique_endpoints_count] = ep_hash;
+        p->endpoint_ids[p->unique_endpoints_count] = ep_id;
         p->unique_endpoints_count++;
     }
 
     /* 2. Track consecutive repeated endpoint access */
-    if (strncmp(p->last_endpoint, record->endpoint, sizeof(p->last_endpoint)) == 0) {
+    if (p->last_endpoint_id != EP_ID_INVALID && p->last_endpoint_id == ep_id) {
         p->consecutive_endpoint_count++;
         if (p->consecutive_endpoint_count >= 2) {
             p->repeated_requests++;
         }
     } else {
-        strncpy(p->last_endpoint, record->endpoint, sizeof(p->last_endpoint) - 1);
-        p->last_endpoint[sizeof(p->last_endpoint) - 1] = '\0';
+        p->last_endpoint_id = ep_id;
         p->consecutive_endpoint_count = 1;
     }
 

@@ -74,7 +74,8 @@ static void HandleHttpClient(int client_sock, struct sockaddr_in *client_addr)
     /* Evaluate Threat Rules on Board */
     Detection_Evaluate(&record);
 
-    /* Update Behavioral IP Profile on FRDM-RW612 */
+    /* Update Behavioral IP Profile on FRDM-RW612 (thread-safe) */
+    IPProfile_Lock();
     IPProfile_t *profile = IPProfile_GetOrCreate(record.source_ip, record.timestamp_tick);
     if (profile != NULL) {
         IPProfile_Update(profile, &record);
@@ -92,16 +93,20 @@ static void HandleHttpClient(int client_sock, struct sockaddr_in *client_addr)
             uint32_t new_score = profile->threat_score + seq_threat_delta;
             profile->threat_score = (new_score > 100) ? 100 : (uint8_t)new_score;
             record.triggered_event = EVENT_ATTACK_SEQUENCE;
-            record.severity = (pattern == PATTERN_RECONNAISSANCE || pattern == PATTERN_CREDENTIAL_HUNT) ?
+            record.severity = (pattern == PATTERN_RECONNAISSANCE ||
+                               pattern == PATTERN_CREDENTIAL_HUNT ||
+                               profile->sequence_history.sequence_score >= SEQ_SCORE_CRIT_THRESHOLD) ?
                               SEV_CRITICAL : SEV_WARNING;
             strncpy(record.event_description, seq_desc, sizeof(record.event_description) - 1);
-            PRINTF("[Sequence] ALERT: Pattern '%s' detected from %s (+%u score)\r\n",
-                   Sequence_GetPatternString(pattern), record.source_ip, seq_threat_delta);
+            PRINTF("[Sequence] ALERT: Pattern '%s' detected from %s (+%u score, seq=%u)\r\n",
+                   Sequence_GetPatternString(pattern), record.source_ip,
+                   seq_threat_delta, (unsigned int)profile->sequence_history.sequence_score);
         }
 
         record.ip_threat_score = profile->threat_score;
         strncpy(record.ip_risk_level, IPProfile_GetRiskLevelString(profile->risk_level), sizeof(record.ip_risk_level) - 1);
     }
+    IPProfile_Unlock();
 
     int status_code = 200;
     const char *status_text = "OK";
@@ -118,14 +123,16 @@ static void HandleHttpClient(int client_sock, struct sockaddr_in *client_addr)
                  (unsigned long)OfflineBuffer_GetPendingCount());
     } else if (strcmp(norm_path, "/memory") == 0) {
         ThreatMemoryStats_t mem_stats;
+        IPProfile_Lock();
         ThreatMem_GetStats(&mem_stats, IPProfile_GetActiveCount());
+        IPProfile_Unlock();
         OfflineBufferStats_t off_stats;
         OfflineBuffer_GetStats(&off_stats);
         snprintf(resp_body, sizeof(resp_body),
                  "{\"device_id\":\"%s\",\"total_security_bss_bytes\":%lu,\"active_profiles\":%lu,"
                  "\"max_profiles\":%lu,\"profile_bytes_used\":%lu,\"free_heap\":%lu,\"min_free_heap\":%lu,"
-                 "\"pressure_level\":\"%s\",\"evictions\":%lu,\"compressed_benign\":%lu,"
-                 "\"compressed_suspicious\":%lu,\"highest_evicted_score\":%u,\"pending_offline_events\":%lu}\r\n",
+                 "\"pressure_level\":\"%s\",\"evictions\":%lu,\"pressure_events\":%lu,\"sequence_detections\":%lu,"
+                 "\"compressed_benign\":%lu,\"compressed_suspicious\":%lu,\"highest_evicted_score\":%u,\"pending_offline_events\":%lu}\r\n",
                  HONEYPOT_DEVICE_ID,
                  (unsigned long)mem_stats.total_security_bss_bytes,
                  (unsigned long)mem_stats.active_profiles_count,
@@ -135,6 +142,8 @@ static void HandleHttpClient(int client_sock, struct sockaddr_in *client_addr)
                  (unsigned long)mem_stats.min_ever_free_heap_bytes,
                  ThreatMem_GetPressureString(mem_stats.pressure_level),
                  (unsigned long)mem_stats.eviction_summary.total_evicted_count,
+                 (unsigned long)mem_stats.memory_pressure_events,
+                 (unsigned long)mem_stats.sequence_detections,
                  (unsigned long)mem_stats.eviction_summary.evicted_benign_count,
                  (unsigned long)mem_stats.eviction_summary.evicted_suspicious_count,
                  mem_stats.eviction_summary.highest_evicted_threat_score,

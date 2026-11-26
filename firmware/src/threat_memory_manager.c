@@ -4,19 +4,35 @@
 
 #include "threat_memory_manager.h"
 #include "ip_profile.h"
+#include "sequence_detection.h"
 
+#ifndef HOST_UNIT_TEST
 #include "FreeRTOS.h"
 #include "task.h"
 #include "fsl_debug_console.h"
+#else
+#define PRINTF(...) ((void)0)
+static inline size_t xPortGetFreeHeapSize(void) { return 0; }
+static inline size_t xPortGetMinimumEverFreeHeapSize(void) { return 0; }
+#endif
 
 #include <string.h>
 #include <stdio.h>
 
 static ThreatEvictionSummary_t s_eviction_summary;
+static uint32_t s_memory_pressure_events = 0;
 
 void ThreatMem_Init(void)
 {
     memset(&s_eviction_summary, 0, sizeof(s_eviction_summary));
+    s_memory_pressure_events = 0;
+}
+
+void ThreatMem_RecordPressureEvent(MemoryPressureLevel_t level)
+{
+    if (level >= MEM_PRESSURE_MODERATE) {
+        s_memory_pressure_events++;
+    }
 }
 
 uint32_t ThreatMem_CalculatePriority(const IPProfile_t *p, uint32_t current_tick)
@@ -38,14 +54,13 @@ uint32_t ThreatMem_CalculatePriority(const IPProfile_t *p, uint32_t current_tick
     priority += susp_score;
 
     /* 3. Attack sequence detection bonus (+50 pts) */
-    if (p->sequence_history.count >= 2) {
+    if (p->sequence_history.sequence_score >= SEQ_SCORE_WARN_THRESHOLD ||
+        p->sequence_history.pattern_count > 0) {
         priority += 50;
     }
 
-    /* 4. Recency bonus */
-    uint32_t elapsed = (current_tick >= p->last_seen_tick) ?
-                       (current_tick - p->last_seen_tick) :
-                       (0xFFFFFFFF - p->last_seen_tick + current_tick);
+    /* 4. Recency bonus (wraparound-safe) */
+    uint32_t elapsed = (uint32_t)(current_tick - p->last_seen_tick);
 
     if (elapsed < 60000) {          /* Active within past 60s */
         priority += 25;
@@ -62,8 +77,9 @@ bool ThreatMem_IsCriticalProtected(const IPProfile_t *p, uint32_t current_tick)
         return false;
     }
 
-    /* Protected if risk level is HIGH or CRITICAL */
-    if (p->threat_score >= 70 || p->risk_level >= RISK_HIGH) {
+    /* Protected if risk level is HIGH or CRITICAL or high sequence score */
+    if (p->threat_score >= 70 || p->risk_level >= RISK_HIGH ||
+        p->sequence_history.sequence_score >= SEQ_SCORE_CRIT_THRESHOLD) {
         return true;
     }
 
@@ -145,16 +161,17 @@ int32_t ThreatMem_SelectEvictionVictim(const IPProfile_t *profiles, uint32_t cou
     }
 
     /* Stage 3: Extreme memory pressure (all profiles have high priority)
-     * Even under pressure, evict the profile with lowest calculated priority and oldest seen tick */
-    uint32_t oldest_tick = 0xFFFFFFFF;
+     * Even under pressure, evict the profile with lowest calculated priority and longest idle elapsed time */
+    uint32_t max_elapsed = 0;
     min_priority = 0xFFFFFFFF;
 
     for (uint32_t i = 0; i < count; i++) {
         if (profiles[i].is_active) {
             uint32_t prio = ThreatMem_CalculatePriority(&profiles[i], current_tick);
-            if (prio < min_priority || (prio == min_priority && profiles[i].last_seen_tick < oldest_tick)) {
+            uint32_t idle_elapsed = (uint32_t)(current_tick - profiles[i].last_seen_tick);
+            if (prio < min_priority || (prio == min_priority && idle_elapsed > max_elapsed)) {
                 min_priority = prio;
-                oldest_tick = profiles[i].last_seen_tick;
+                max_elapsed = idle_elapsed;
                 best_victim = (int32_t)i;
             }
         }
@@ -191,12 +208,17 @@ void ThreatMem_GetStats(ThreatMemoryStats_t *out_stats, uint32_t active_count)
         return;
     }
 
+    SequenceStats_t seq_stats;
+    Sequence_GetStats(&seq_stats);
+
     out_stats->max_profiles_capacity = THREAT_MEM_MAX_PROFILES;
     out_stats->active_profiles_count = active_count;
     out_stats->profile_bytes_used = active_count * sizeof(IPProfile_t);
     out_stats->total_security_bss_bytes = (THREAT_MEM_MAX_PROFILES * sizeof(IPProfile_t)) + sizeof(ThreatEvictionSummary_t);
     out_stats->free_heap_bytes = (uint32_t)xPortGetFreeHeapSize();
     out_stats->min_ever_free_heap_bytes = (uint32_t)xPortGetMinimumEverFreeHeapSize();
+    out_stats->memory_pressure_events = s_memory_pressure_events;
+    out_stats->sequence_detections = seq_stats.total_sequence_detections;
     out_stats->pressure_level = ThreatMem_GetPressureLevel(active_count);
     memcpy(&out_stats->eviction_summary, &s_eviction_summary, sizeof(ThreatEvictionSummary_t));
 }

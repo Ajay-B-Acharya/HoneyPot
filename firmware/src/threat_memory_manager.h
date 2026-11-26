@@ -51,6 +51,8 @@ typedef struct {
     uint32_t profile_bytes_used;
     uint32_t free_heap_bytes;
     uint32_t min_ever_free_heap_bytes;
+    uint32_t memory_pressure_events;
+    uint32_t sequence_detections;
     MemoryPressureLevel_t pressure_level;
     ThreatEvictionSummary_t eviction_summary;
 } ThreatMemoryStats_t;
@@ -83,5 +85,8 @@ const char *ThreatMem_GetPressureString(MemoryPressureLevel_t level);
 
 /* Query complete memory diagnostics snapshot */
 void ThreatMem_GetStats(ThreatMemoryStats_t *out_stats, uint32_t active_count);
+
+/* Record a memory-pressure event (moderate/high/critical table occupancy) */
+void ThreatMem_RecordPressureEvent(MemoryPressureLevel_t level);
 
 #endif /* THREAT_MEMORY_MANAGER_H_ */

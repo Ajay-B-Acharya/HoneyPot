@@ -24,6 +24,7 @@
 #include "honeypot_config.h"
 #include "detection_rules.h"
 #include "ip_profile.h"
+#include "sequence_detection.h"
 #include "honeypot_server.h"
 #include "telemetry_client.h"
 
@@ -114,6 +115,7 @@ static void Main_Supervisor_Task(void *arg)
 
     /* 1. Initialize Edge Detection System */
     Detection_Init();
+    Sequence_Init();
     IPProfile_Init();
 
     /* 2. Initialize Telemetry Dispatcher */
