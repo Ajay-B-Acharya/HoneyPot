@@ -5,6 +5,7 @@ Using NXP FRDM-RW612.
 """
 
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -61,10 +62,22 @@ def create_app() -> FastAPI:
     async def global_exception_handler(request: Request, exc: Exception):
         """Catch unhandled exceptions and return a safe error response.
 
-        Never expose internal details, stack traces, or credentials.
+        Never expose internal details, stack traces, or credentials, while
+        logging the exception server-side and preserving CORS headers for
+        allowed origins.
         """
+        logging.getLogger("uvicorn.error").exception(
+            "Unhandled exception on %s %s", request.method, request.url.path
+        )
+        headers: dict[str, str] = {}
+        origin = request.headers.get("origin")
+        if origin and origin in settings.cors_origins_list:
+            headers["Access-Control-Allow-Origin"] = origin
+            headers["Access-Control-Allow-Credentials"] = "true"
+            headers["Vary"] = "Origin"
         return JSONResponse(
             status_code=500,
+            headers=headers,
             content={
                 "detail": "An internal server error occurred.",
                 "status_code": 500,

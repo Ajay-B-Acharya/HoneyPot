@@ -6,7 +6,7 @@ by changing DATABASE_URL without restructuring the application.
 
 from collections.abc import Generator
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_settings
@@ -61,6 +61,24 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
+def _ensure_schema_columns() -> None:
+    """Apply lightweight, idempotent column migrations for existing SQLite tables."""
+    inspector = inspect(engine)
+    if "security_events" in inspector.get_table_names():
+        existing_cols = {col["name"] for col in inspector.get_columns("security_events")}
+        if "client_event_id" not in existing_cols:
+            with engine.begin() as conn:
+                conn.execute(
+                    text("ALTER TABLE security_events ADD COLUMN client_event_id VARCHAR(64)")
+                )
+                conn.execute(
+                    text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS ix_security_events_client_event_id "
+                        "ON security_events (client_event_id)"
+                    )
+                )
+
+
 def init_db() -> None:
     """Create all tables defined by Base metadata.
 
@@ -68,3 +86,4 @@ def init_db() -> None:
     For production, replace with Alembic migrations.
     """
     Base.metadata.create_all(bind=engine)
+    _ensure_schema_columns()
