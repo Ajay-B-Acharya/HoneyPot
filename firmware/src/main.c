@@ -37,6 +37,7 @@ extern int wlan_set_country_ie_ignore(uint8_t *ignore);
 /* Link state callback */
 static void LinkStatusChangeCallback(bool linkState)
 {
+    Telemetry_SetWifiConnected(linkState);
     if (!linkState) {
         PRINTF("[Wi-Fi] Link Lost! Will attempt automatic reconnect.\r\n");
     } else {
@@ -97,6 +98,7 @@ static bool WiFi_ConnectAP(void)
 
     char ip_str[16];
     WPL_GetIP(ip_str, 1);
+    Telemetry_SetWifiConnected(true);
     PRINTF("[Wi-Fi] Associated successfully! Local IP: %s\r\n", ip_str);
     return true;
 }

@@ -3,6 +3,7 @@
 from datetime import datetime
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.request_log import RequestLog
@@ -15,16 +16,19 @@ def create_log(db: Session, log_data: RequestLogCreate) -> RequestLog:
     """Create a new request log record and evaluate security detection rules.
 
     The request log and any triggered security events are persisted atomically
-    within the same database transaction.
-
-    Args:
-        db: Database session.
-        log_data: Validated log creation data.
-
-    Returns:
-        The created RequestLog ORM instance.
+    within the same database transaction. Idempotent when client_event_id is set.
     """
+    if log_data.client_event_id:
+        existing = (
+            db.query(RequestLog)
+            .filter(RequestLog.client_event_id == log_data.client_event_id)
+            .first()
+        )
+        if existing:
+            return existing
+
     db_log = RequestLog(
+        client_event_id=log_data.client_event_id,
         timestamp=log_data.timestamp,
         device_id=log_data.device_id,
         source_ip=log_data.source_ip,
@@ -42,6 +46,17 @@ def create_log(db: Session, log_data: RequestLogCreate) -> RequestLog:
         db.commit()
         db.refresh(db_log)
         return db_log
+    except IntegrityError:
+        db.rollback()
+        if log_data.client_event_id:
+            existing = (
+                db.query(RequestLog)
+                .filter(RequestLog.client_event_id == log_data.client_event_id)
+                .first()
+            )
+            if existing:
+                return existing
+        raise
     except Exception:
         db.rollback()
         raise

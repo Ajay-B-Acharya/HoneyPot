@@ -64,19 +64,21 @@ def get_db() -> Generator[Session, None, None]:
 def _ensure_schema_columns() -> None:
     """Apply lightweight, idempotent column migrations for existing SQLite tables."""
     inspector = inspect(engine)
-    if "security_events" in inspector.get_table_names():
-        existing_cols = {col["name"] for col in inspector.get_columns("security_events")}
-        if "client_event_id" not in existing_cols:
-            with engine.begin() as conn:
-                conn.execute(
-                    text("ALTER TABLE security_events ADD COLUMN client_event_id VARCHAR(64)")
-                )
-                conn.execute(
-                    text(
-                        "CREATE UNIQUE INDEX IF NOT EXISTS ix_security_events_client_event_id "
-                        "ON security_events (client_event_id)"
+    tables = set(inspector.get_table_names())
+    for table_name in ("security_events", "request_logs"):
+        if table_name in tables:
+            existing_cols = {col["name"] for col in inspector.get_columns(table_name)}
+            if "client_event_id" not in existing_cols:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text(f"ALTER TABLE {table_name} ADD COLUMN client_event_id VARCHAR(64)")
                     )
-                )
+                    conn.execute(
+                        text(
+                            f"CREATE UNIQUE INDEX IF NOT EXISTS ix_{table_name}_client_event_id "
+                            f"ON {table_name} (client_event_id)"
+                        )
+                    )
 
 
 def init_db() -> None:

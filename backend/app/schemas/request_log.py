@@ -21,6 +21,9 @@ VALID_HTTP_METHODS = {
 
 class RequestLogCreate(BaseModel):
     """Schema for creating a new request log entry."""
+    client_event_id: str | None = Field(
+        None, max_length=64, description="Deterministic edge log ID for idempotent deduplication"
+    )
     timestamp: datetime = Field(..., description="UTC timestamp of the observed request")
     device_id: str = Field(..., min_length=1, max_length=128, description="Device identifier")
     source_ip: str | None = Field(None, max_length=45, description="Source IP address")

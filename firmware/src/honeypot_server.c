@@ -115,12 +115,20 @@ static void HandleHttpClient(int client_sock, struct sockaddr_in *client_addr)
         uint32_t uptime_sec = (record.timestamp_tick / 1000);
         uint32_t active_ips = IPProfile_GetActiveCount();
         MemoryPressureLevel_t pressure = ThreatMem_GetPressureLevel(active_ips);
+        TelemetryStats_t tel_stats;
+        Telemetry_GetStats(&tel_stats);
         snprintf(resp_body, sizeof(resp_body),
                  "{\"device_status\":\"ok\",\"uptime_sec\":%lu,\"device_id\":\"%s\",\"free_heap\":%u,"
-                 "\"active_ip_profiles\":%lu,\"mem_pressure\":\"%s\",\"pending_offline_events\":%lu}\r\n",
+                 "\"active_ip_profiles\":%lu,\"mem_pressure\":\"%s\",\"pending_offline_events\":%lu,"
+                 "\"crit_q\":%lu,\"routine_q\":%lu,\"routine_dropped\":%lu,\"retries\":%lu,\"wifi\":%s}\r\n",
                  (unsigned long)uptime_sec, HONEYPOT_DEVICE_ID, (unsigned int)xPortGetFreeHeapSize(),
                  (unsigned long)active_ips, ThreatMem_GetPressureString(pressure),
-                 (unsigned long)OfflineBuffer_GetPendingCount());
+                 (unsigned long)OfflineBuffer_GetPendingCount(),
+                 (unsigned long)tel_stats.critical_queue_depth,
+                 (unsigned long)tel_stats.routine_queue_depth,
+                 (unsigned long)tel_stats.routine_dropped,
+                 (unsigned long)tel_stats.total_retries,
+                 tel_stats.wifi_connected ? "true" : "false");
     } else if (strcmp(norm_path, "/memory") == 0) {
         ThreatMemoryStats_t mem_stats;
         IPProfile_Lock();

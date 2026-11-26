@@ -82,6 +82,8 @@ class BatchSyncResponse(BaseModel):
     received: int
     inserted: int
     duplicates: int
+    acked_ids: list[str] = Field(default_factory=list)
+    failed_ids: list[str] = Field(default_factory=list)
     status: str = "reconciled"
 
 

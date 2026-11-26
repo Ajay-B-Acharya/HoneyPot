@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.security_event import SecurityEvent
@@ -50,43 +51,55 @@ def create_event(db: Session, event_data: SecurityEventCreate) -> SecurityEvent:
         metadata_json=json.dumps(meta) if meta else None,
     )
     db.add(db_event)
-    db.commit()
-    db.refresh(db_event)
-    return db_event
+    try:
+        db.commit()
+        db.refresh(db_event)
+        return db_event
+    except IntegrityError:
+        db.rollback()
+        if event_data.client_event_id:
+            existing = (
+                db.query(SecurityEvent)
+                .filter(SecurityEvent.client_event_id == event_data.client_event_id)
+                .first()
+            )
+            if existing:
+                return existing
+        raise
 
 
 def create_events_batch(
     db: Session, batch: SecurityEventBatchCreate
 ) -> BatchSyncResponse:
-    """Batch reconcile security events idempotently.
+    """Batch reconcile security events idempotently with per-item savepoints.
 
-    Args:
-        db: Database session.
-        batch: Batch of security events from device.
-
-    Returns:
-        BatchSyncResponse with received, inserted, and duplicate counts.
+    Supports partial batch failures and intra-batch / concurrent duplicates
+    while returning explicit acknowledged and failed client_event_id lists.
     """
     inserted = 0
     duplicates = 0
+    acked_ids: list[str] = []
+    failed_ids: list[str] = []
 
     for item in batch.events:
-        if item.client_event_id:
+        cid = item.client_event_id
+        if cid:
             existing = (
                 db.query(SecurityEvent)
-                .filter(SecurityEvent.client_event_id == item.client_event_id)
+                .filter(SecurityEvent.client_event_id == cid)
                 .first()
             )
             if existing:
                 duplicates += 1
+                acked_ids.append(cid)
                 continue
 
         meta = dict(item.metadata or {})
-        if item.client_event_id:
-            meta["client_event_id"] = item.client_event_id
+        if cid:
+            meta["client_event_id"] = cid
 
         db_event = SecurityEvent(
-            client_event_id=item.client_event_id,
+            client_event_id=cid,
             timestamp=item.timestamp,
             device_id=item.device_id,
             event_type=item.event_type,
@@ -97,15 +110,30 @@ def create_events_batch(
             time_window_seconds=item.time_window_seconds,
             metadata_json=json.dumps(meta) if meta else None,
         )
-        db.add(db_event)
-        inserted += 1
+        try:
+            with db.begin_nested():
+                db.add(db_event)
+                db.flush()
+            inserted += 1
+            if cid:
+                acked_ids.append(cid)
+        except IntegrityError:
+            duplicates += 1
+            if cid:
+                acked_ids.append(cid)
+        except Exception:
+            if cid:
+                failed_ids.append(cid)
 
     db.commit()
+    status = "reconciled" if not failed_ids else "partial"
     return BatchSyncResponse(
         received=len(batch.events),
         inserted=inserted,
         duplicates=duplicates,
-        status="reconciled",
+        acked_ids=acked_ids,
+        failed_ids=failed_ids,
+        status=status,
     )
 
 
