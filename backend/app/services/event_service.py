@@ -176,7 +176,7 @@ def get_events(
         query = query.filter(SecurityEvent.timestamp <= end_time)
 
     total = query.count()
-    events = query.order_by(SecurityEvent.timestamp.desc()).offset(skip).limit(limit).all()
+    events = query.order_by(SecurityEvent.created_at.desc(), SecurityEvent.id.desc()).offset(skip).limit(limit).all()
 
     return events, total
 
@@ -201,3 +201,31 @@ def count_events_by_severity(db: Session) -> dict[str, int]:
 def count_total_events(db: Session) -> int:
     """Count total number of security events."""
     return db.query(func.count(SecurityEvent.id)).scalar() or 0
+
+
+def delete_event(db: Session, event_id: int) -> bool:
+    """Delete a single security event by ID.
+
+    Returns:
+        True if the event existed and was deleted, False otherwise.
+    """
+    event = db.query(SecurityEvent).filter(SecurityEvent.id == event_id).first()
+    if event is None:
+        return False
+    db.delete(event)
+    db.commit()
+    return True
+
+
+def clear_events(db: Session, severity: str | None = None) -> int:
+    """Delete security events, optionally filtered by severity.
+
+    Returns:
+        Number of deleted events.
+    """
+    query = db.query(SecurityEvent)
+    if severity:
+        query = query.filter(SecurityEvent.severity == severity)
+    deleted_count = query.delete(synchronize_session=False)
+    db.commit()
+    return int(deleted_count)

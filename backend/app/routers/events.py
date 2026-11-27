@@ -121,3 +121,34 @@ async def list_security_events(
         skip=skip,
         limit=limit,
     )
+
+
+@router.delete(
+    "/{event_id}",
+    summary="Delete a security event",
+    description="Delete a single security event / notification by ID.",
+)
+async def delete_security_event(
+    event_id: int,
+    db: Session = Depends(get_db),
+) -> dict[str, bool | int]:
+    """Delete a single security event by ID."""
+    deleted = event_service.delete_event(db, event_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Security event not found")
+    return {"deleted": True, "id": event_id}
+
+
+@router.delete(
+    "",
+    summary="Clear security events",
+    description="Delete all security events / notifications, optionally filtered by severity.",
+)
+async def clear_security_events(
+    severity: SeverityEnum | None = Query(None, description="Optional severity filter"),
+    db: Session = Depends(get_db),
+) -> dict[str, int]:
+    """Clear security events."""
+    severity_value = severity.value if severity else None
+    deleted_count = event_service.clear_events(db, severity=severity_value)
+    return {"deleted_count": deleted_count}

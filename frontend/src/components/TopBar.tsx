@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   PanelLeftClose,
   PanelLeftOpen,
@@ -8,8 +8,10 @@ import {
   Settings,
   RefreshCw,
   UserCheck,
+  Trash2,
 } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
+import { SecurityEvent } from "../types/api";
 
 interface TopBarProps {
   collapsed: boolean;
@@ -18,6 +20,9 @@ interface TopBarProps {
   searchQuery: string;
   onSearchChange: (value: string) => void;
   criticalCount: number;
+  notifications: SecurityEvent[];
+  onDeleteNotification: (eventId: number) => void;
+  onClearNotifications: () => void;
   refreshing: boolean;
   onRefresh: () => void;
   autoRefresh: boolean;
@@ -33,6 +38,9 @@ export const TopBar: React.FC<TopBarProps> = ({
   searchQuery,
   onSearchChange,
   criticalCount,
+  notifications,
+  onDeleteNotification,
+  onClearNotifications,
   refreshing,
   onRefresh,
   autoRefresh,
@@ -40,6 +48,20 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenEvents,
   onOpenSettings,
 }) => {
+  const [notifOpen, setNotifOpen] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const recentNotifications = notifications.slice(0, 8);
   return (
     <header className="nids-topbar">
       <div className="topbar-left">
@@ -100,20 +122,90 @@ export const TopBar: React.FC<TopBarProps> = ({
 
         <ThemeToggle />
 
-        <button
-          type="button"
-          className="icon-btn notification-btn"
-          onClick={onOpenEvents}
-          aria-label={`Security notifications (${criticalCount} critical)`}
-          title={`${criticalCount} critical alerts`}
-        >
-          <Bell size={16} />
-          {criticalCount > 0 && (
-            <span className="notification-badge">
-              {criticalCount > 99 ? "99+" : criticalCount}
-            </span>
+        <div className="notification-wrapper" ref={notifRef}>
+          <button
+            type="button"
+            className="icon-btn notification-btn"
+            onClick={() => setNotifOpen((o) => !o)}
+            aria-label={`Security notifications (${criticalCount} critical)`}
+            aria-expanded={notifOpen}
+            title={`${criticalCount} critical alerts`}
+          >
+            <Bell size={16} />
+            {criticalCount > 0 && (
+              <span className="notification-badge">
+                {criticalCount > 99 ? "99+" : criticalCount}
+              </span>
+            )}
+          </button>
+
+          {notifOpen && (
+            <div className="notification-popover" role="dialog" aria-label="Security notifications">
+              <div className="notification-popover-header">
+                <span>Notifications ({notifications.length})</span>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  {notifications.length > 0 && (
+                    <button
+                      type="button"
+                      className="btn-danger-ghost"
+                      onClick={() => {
+                        onClearNotifications();
+                        setNotifOpen(false);
+                      }}
+                    >
+                      Clear All
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-link"
+                    onClick={() => {
+                      setNotifOpen(false);
+                      onOpenEvents();
+                    }}
+                  >
+                    View All
+                  </button>
+                </div>
+              </div>
+
+              <div className="notification-popover-body">
+                {recentNotifications.length === 0 ? (
+                  <div className="notification-empty">No active security notifications.</div>
+                ) : (
+                  recentNotifications.map((evt) => (
+                    <div key={evt.id} className="notification-item">
+                      <div className="notification-item-content">
+                        <div className="notification-item-title">
+                          <span className={`badge badge-${evt.severity === "critical" ? "critical" : evt.severity === "warning" ? "warning" : "info"}`}>
+                            {evt.severity}
+                          </span>
+                          <span className="mono-cell">{evt.event_type}</span>
+                        </div>
+                        <div className="notification-item-desc" title={evt.description}>
+                          {evt.description}
+                        </div>
+                        <div className="notification-item-meta">
+                          {evt.source_ip ?? "Unknown IP"} · {new Date(evt.timestamp).toLocaleTimeString()}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        style={{ width: "26px", height: "26px", flexShrink: 0 }}
+                        onClick={() => onDeleteNotification(evt.id)}
+                        aria-label={`Delete notification ${evt.id}`}
+                        title="Delete notification"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           )}
-        </button>
+        </div>
 
         <button
           type="button"

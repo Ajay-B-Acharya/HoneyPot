@@ -97,7 +97,7 @@ def get_logs(
         query = query.filter(RequestLog.timestamp <= end_time)
 
     total = query.count()
-    logs = query.order_by(RequestLog.timestamp.desc()).offset(skip).limit(limit).all()
+    logs = query.order_by(RequestLog.created_at.desc(), RequestLog.id.desc()).offset(skip).limit(limit).all()
 
     return logs, total
 

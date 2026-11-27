@@ -179,3 +179,22 @@ export async function batchSyncSecurityEvents(
     body: JSON.stringify({ events }),
   });
 }
+
+/** Delete a single security event / notification by ID */
+export async function deleteSecurityEvent(
+  eventId: number
+): Promise<{ deleted: boolean; id: number }> {
+  return request<{ deleted: boolean; id: number }>(`/events/${eventId}`, {
+    method: "DELETE",
+  });
+}
+
+/** Clear all security events / notifications, optionally filtered by severity */
+export async function clearSecurityEvents(
+  severity?: string
+): Promise<{ deleted_count: number }> {
+  const qs = severity ? `?severity=${encodeURIComponent(severity)}` : "";
+  return request<{ deleted_count: number }>(`/events${qs}`, {
+    method: "DELETE",
+  });
+}

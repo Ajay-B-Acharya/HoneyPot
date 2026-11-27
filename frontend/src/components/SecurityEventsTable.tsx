@@ -1,5 +1,5 @@
 import React from "react";
-import { ShieldAlert, AlertTriangle, AlertOctagon, Info, GitCommit, ArrowRight } from "lucide-react";
+import { ShieldAlert, AlertTriangle, AlertOctagon, Info, GitCommit, ArrowRight, Trash2 } from "lucide-react";
 import { SecurityEvent } from "../types/api";
 
 interface SecurityEventsTableProps {
@@ -7,6 +7,8 @@ interface SecurityEventsTableProps {
   loading: boolean;
   error: string | null;
   onViewAll?: () => void;
+  onDeleteEvent?: (eventId: number) => void;
+  onClearAll?: () => void;
 }
 
 export const SecurityEventsTable: React.FC<SecurityEventsTableProps> = ({
@@ -14,6 +16,8 @@ export const SecurityEventsTable: React.FC<SecurityEventsTableProps> = ({
   loading,
   error,
   onViewAll,
+  onDeleteEvent,
+  onClearAll,
 }) => {
   const getSeverityBadge = (severity: string) => {
     switch (severity.toLowerCase()) {
@@ -49,11 +53,24 @@ export const SecurityEventsTable: React.FC<SecurityEventsTableProps> = ({
           <ShieldAlert size={18} className="icon-amber" />
           <span>Security Events ({events.length})</span>
         </div>
-        {onViewAll && (
-          <button type="button" className="btn-link" onClick={onViewAll}>
-            View All
-          </button>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          {onClearAll && events.length > 0 && (
+            <button
+              type="button"
+              className="btn-danger-ghost"
+              onClick={onClearAll}
+              title="Clear all security events and notifications"
+            >
+              <Trash2 size={13} style={{ marginRight: "4px", verticalAlign: "text-bottom" }} />
+              Clear All
+            </button>
+          )}
+          {onViewAll && (
+            <button type="button" className="btn-link" onClick={onViewAll}>
+              View All
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="table-container">
@@ -78,6 +95,7 @@ export const SecurityEventsTable: React.FC<SecurityEventsTableProps> = ({
                 <th>Scores &amp; Confidence</th>
                 <th>Source IP / Obs ID</th>
                 <th>Description</th>
+                {onDeleteEvent && <th style={{ width: "60px", textAlign: "right" }}>Action</th>}
               </tr>
             </thead>
             <tbody>
@@ -153,6 +171,20 @@ export const SecurityEventsTable: React.FC<SecurityEventsTableProps> = ({
                     <td title={evt.description} style={{ maxWidth: "280px" }}>
                       {evt.description}
                     </td>
+                    {onDeleteEvent && (
+                      <td style={{ textAlign: "right" }}>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          style={{ width: "28px", height: "28px" }}
+                          onClick={() => onDeleteEvent(evt.id)}
+                          aria-label={`Delete event ${evt.id}`}
+                          title="Delete notification"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}

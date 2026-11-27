@@ -191,6 +191,7 @@ void Telemetry_GetStats(TelemetryStats_t *out_stats)
 }
 
 #ifndef HOST_UNIT_TEST
+#include <errno.h>
 static bool SendHttpPayload(const char *path, const char *json_payload, char *out_body, size_t out_body_sz)
 {
     if (!s_wifi_connected) {
@@ -199,6 +200,7 @@ static bool SendHttpPayload(const char *path, const char *json_payload, char *ou
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
+        PRINTF("[Telemetry] Socket create failed for %s (errno=%d)\r\n", path, errno);
         return false;
     }
 
@@ -215,6 +217,8 @@ static bool SendHttpPayload(const char *path, const char *json_payload, char *ou
     serv_addr.sin_addr.s_addr = inet_addr(BACKEND_HOST_IP);
 
     if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+        PRINTF("[Telemetry] Connect to %s:%d%s failed (errno=%d)\r\n",
+               BACKEND_HOST_IP, BACKEND_HOST_PORT, path, errno);
         close(sock);
         return false;
     }
@@ -231,11 +235,14 @@ static bool SendHttpPayload(const char *path, const char *json_payload, char *ou
                            (int)strlen(json_payload), json_payload);
 
     if (req_len <= 0 || req_len >= (int)sizeof(http_req)) {
+        PRINTF("[Telemetry] Request buffer overflow for %s (len=%d)\r\n", path, req_len);
         close(sock);
         return false;
     }
 
     if (send(sock, http_req, req_len, 0) < 0) {
+        PRINTF("[Telemetry] Send to %s:%d%s failed (errno=%d)\r\n",
+               BACKEND_HOST_IP, BACKEND_HOST_PORT, path, errno);
         close(sock);
         return false;
     }
@@ -255,9 +262,15 @@ static bool SendHttpPayload(const char *path, const char *json_payload, char *ou
                 out_body[0] = '\0';
             }
         }
-        if (strstr(rx_buf, "200 OK") != NULL || strstr(rx_buf, "201 Created") != NULL) {
+        int status_code = 0;
+        if (sscanf(rx_buf, "HTTP/%*d.%*d %d", &status_code) == 1 &&
+            (status_code == 200 || status_code == 201)) {
             return true;
         }
+        PRINTF("[Telemetry] HTTP error on %s (status=%d)\r\n", path, status_code);
+    } else {
+        PRINTF("[Telemetry] Recv from %s:%d%s failed (recvd=%d, errno=%d)\r\n",
+               BACKEND_HOST_IP, BACKEND_HOST_PORT, path, recvd, errno);
     }
     return false;
 }
@@ -427,8 +440,13 @@ static void SendPeriodicHeartbeatIfDue(void)
 
     if (SendHttpPayload("/api/device/heartbeat", hb_buf, NULL, 0U)) {
         s_backend_online = true;
+        PRINTF("[Telemetry] Heartbeat #%lu -> %s:%d OK (ip=%s, uptime=%lus, heap=%lu)\r\n",
+               (unsigned long)s_heartbeat_seq, BACKEND_HOST_IP, BACKEND_HOST_PORT,
+               s_device_ip, (unsigned long)uptime_sec, (unsigned long)free_heap);
     } else {
         s_backend_online = false;
+        PRINTF("[Telemetry] Heartbeat #%lu -> %s:%d FAILED\r\n",
+               (unsigned long)s_heartbeat_seq, BACKEND_HOST_IP, BACKEND_HOST_PORT);
     }
 }
 

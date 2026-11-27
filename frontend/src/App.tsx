@@ -9,6 +9,8 @@ import {
   fetchIPProfiles,
   fetchDeviceMemoryStats,
   fetchObservations,
+  deleteSecurityEvent,
+  clearSecurityEvents,
 } from "./services/api";
 import {
   HealthResponse,
@@ -91,8 +93,8 @@ export const App: React.FC = () => {
       ] = await Promise.allSettled([
         fetchDashboardStats(),
         fetchDeviceStatuses(),
-        fetchSecurityEvents({ limit: 50 }),
-        fetchRequestLogs({ limit: 50 }),
+        fetchSecurityEvents({ limit: 100 }),
+        fetchRequestLogs({ limit: 100 }),
         fetchIPProfiles({ limit: 50 }),
         fetchDeviceMemoryStats(),
         fetchObservations(50),
@@ -169,6 +171,29 @@ export const App: React.FC = () => {
 
   const criticalCount = stats?.events_by_severity?.critical ?? 0;
 
+  const handleDeleteEvent = useCallback(
+    async (eventId: number) => {
+      try {
+        await deleteSecurityEvent(eventId);
+        setEvents((prev) => prev.filter((e) => e.id !== eventId));
+        await loadDashboardData(false);
+      } catch (err: any) {
+        setError(err.message || "Failed to delete notification");
+      }
+    },
+    [loadDashboardData]
+  );
+
+  const handleClearEvents = useCallback(async () => {
+    try {
+      await clearSecurityEvents();
+      setEvents([]);
+      await loadDashboardData(false);
+    } catch (err: any) {
+      setError(err.message || "Failed to clear notifications");
+    }
+  }, [loadDashboardData]);
+
   return (
     <div className={`nids-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <ScrollProgressBar />
@@ -192,6 +217,9 @@ export const App: React.FC = () => {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           criticalCount={criticalCount}
+          notifications={events}
+          onDeleteNotification={handleDeleteEvent}
+          onClearNotifications={handleClearEvents}
           refreshing={refreshing}
           onRefresh={() => loadDashboardData(false)}
           autoRefresh={autoRefresh}
@@ -254,6 +282,8 @@ export const App: React.FC = () => {
                 loading={loading}
                 error={error}
                 onViewAll={() => setActiveSection("events")}
+                onDeleteEvent={handleDeleteEvent}
+                onClearAll={handleClearEvents}
               />
             </>
           )}
@@ -263,6 +293,8 @@ export const App: React.FC = () => {
               events={filteredEvents}
               loading={loading}
               error={error}
+              onDeleteEvent={handleDeleteEvent}
+              onClearAll={handleClearEvents}
             />
           )}
 

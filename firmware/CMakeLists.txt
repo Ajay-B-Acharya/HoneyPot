@@ -53,6 +53,16 @@ mcux_add_macro(
        -DPRINTF_ADVANCED_ENABLE=1"
 )
 
+# Optional build-time backend host/port overrides (falls back to honeypot_config.h defaults)
+set(HONEYPOT_BACKEND_HOST "" CACHE STRING "Optional build-time override for BACKEND_HOST_IP")
+set(HONEYPOT_BACKEND_PORT "" CACHE STRING "Optional build-time override for BACKEND_HOST_PORT")
+if(NOT "${HONEYPOT_BACKEND_HOST}" STREQUAL "")
+    mcux_add_macro(CC "-DBACKEND_HOST_IP=\"\\\"${HONEYPOT_BACKEND_HOST}\\\"\"")
+endif()
+if(NOT "${HONEYPOT_BACKEND_PORT}" STREQUAL "")
+    mcux_add_macro(CC "-DBACKEND_HOST_PORT=${HONEYPOT_BACKEND_PORT}")
+endif()
+
 include(${SdkRootDirPath}/${board_root}/${board}/wifi_examples/wifi_httpsrv/reconfig.cmake OPTIONAL)
 
 # Explicitly remove fallback single-core linker scripts and enforce RW610_flash.ld

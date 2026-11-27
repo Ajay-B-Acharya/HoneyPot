@@ -193,3 +193,47 @@ class TestListEvents:
             "/api/events?start_time=2026-10-20T14:00:00Z&end_time=2026-10-20T10:00:00Z"
         )
         assert response.status_code == 400
+
+
+class TestDeleteAndClearEvents:
+    """Tests for DELETE /api/events/{id} and DELETE /api/events."""
+
+    def test_delete_single_event_success(self, client):
+        """Test deleting a single security event by ID."""
+        create_resp = client.post("/api/events", json=VALID_EVENT)
+        event_id = create_resp.json()["id"]
+
+        del_resp = client.delete(f"/api/events/{event_id}")
+        assert del_resp.status_code == 200
+        assert del_resp.json() == {"deleted": True, "id": event_id}
+
+        list_resp = client.get("/api/events")
+        assert list_resp.json()["total"] == 0
+
+    def test_delete_nonexistent_event_returns_404(self, client):
+        """Test deleting a missing security event returns 404."""
+        del_resp = client.delete("/api/events/999999")
+        assert del_resp.status_code == 404
+
+    def test_clear_all_events(self, client):
+        """Test clearing all security events."""
+        client.post("/api/events", json={**VALID_EVENT, "severity": "warning"})
+        client.post("/api/events", json={**VALID_EVENT, "severity": "critical"})
+
+        clear_resp = client.delete("/api/events")
+        assert clear_resp.status_code == 200
+        assert clear_resp.json() == {"deleted_count": 2}
+        assert client.get("/api/events").json()["total"] == 0
+
+    def test_clear_events_filtered_by_severity(self, client):
+        """Test clearing only events matching a specific severity."""
+        client.post("/api/events", json={**VALID_EVENT, "severity": "warning"})
+        client.post("/api/events", json={**VALID_EVENT, "severity": "critical"})
+
+        clear_resp = client.delete("/api/events?severity=critical")
+        assert clear_resp.status_code == 200
+        assert clear_resp.json() == {"deleted_count": 1}
+
+        remaining = client.get("/api/events").json()
+        assert remaining["total"] == 1
+        assert remaining["items"][0]["severity"] == "warning"
